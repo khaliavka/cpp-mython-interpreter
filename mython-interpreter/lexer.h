@@ -92,7 +92,6 @@ static const int INDENT_SIZE = 2;
 
 enum class State {
     NEW_LINE,
-    MAYBE_INDENT,
     MAYBE_ID,
     MAYBE_COMPARE,
     NUMBER,
@@ -211,7 +210,7 @@ private:
     std::string::size_type current_ws_indent_;
     std::string::size_type new_ws_indent_;
     State state_;
-    static Branch transitions_[12][11];
+    static Branch transitions_[11][11];
 };
 
 template <typename T>

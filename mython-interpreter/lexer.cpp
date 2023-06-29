@@ -111,27 +111,26 @@ Token Lexer::NextToken() {
 
 bool Lexer::FeedChar(char c) {
     int const row = (state_ == State::NEW_LINE) ? 0 :
-                        (state_ == State::MAYBE_INDENT) ? 1 :
-                        (state_ == State::MAYBE_ID) ? 2 :
-                        (state_ == State::MAYBE_COMPARE) ? 3 :
-                        (state_ == State::NUMBER) ? 4 :
-                        (state_ == State::STRING_SQ) ? 5 :
-                        (state_ == State::SQ_ESCAPE) ? 6 :
-                        (state_ == State::STRING_DQ) ? 7 :
-                        (state_ == State::DQ_ESCAPE) ? 8 :
-                        (state_ == State::TRAILING_COMMENT) ? 9 :
-                        (state_ == State::LINE_COMMENT) ? 10 : 11;
+                        (state_ == State::MAYBE_ID) ? 1 :
+                        (state_ == State::MAYBE_COMPARE) ? 2 :
+                        (state_ == State::NUMBER) ? 3 :
+                        (state_ == State::STRING_SQ) ? 4 :
+                        (state_ == State::SQ_ESCAPE) ? 5 :
+                        (state_ == State::STRING_DQ) ? 6 :
+                        (state_ == State::DQ_ESCAPE) ? 7 :
+                        (state_ == State::TRAILING_COMMENT) ? 8 :
+                        (state_ == State::LINE_COMMENT) ? 9 : 10;
 
-    int const column =                   (c == '\n') ? 0 :
-                           std::isspace(c) ? 1 :
-                           (c == '_' || std::isalpha(c)) ? 2 :
-                           std::isdigit(c) ? 3 :
-                           (c == '\'') ? 4 :
-                           (c == '"') ? 5 :
-                           (c == '#') ? 6 :
-                           (c == '\\') ? 7 :
-                           (c == '=' || c == '<' || c == '>' || c == '!') ? 8 :
-                           (c == std::char_traits<char>::eof()) ? 9 : 10;
+    int const column = (c == '\n') ? 0 :
+                       std::isspace(c) ? 1 :
+                       (c == '_' || std::isalpha(c)) ? 2 :
+                       std::isdigit(c) ? 3 :
+                       (c == '\'') ? 4 :
+                       (c == '"') ? 5 :
+                       (c == '#') ? 6 :
+                       (c == '\\') ? 7 :
+                       (c == '=' || c == '<' || c == '>' || c == '!') ? 8 :
+                       (c == std::char_traits<char>::eof()) ? 9 : 10;
 
     const Branch* const b = &transitions_[row][column];
     state_ = b->next_state;
@@ -166,7 +165,8 @@ bool Lexer::CountWS(Lexer* l, char) {
 }
 
 bool Lexer::DropIndent(Lexer* l, char) {
-    l->new_ws_indent_ = l->current_ws_indent_;
+//    l->new_ws_indent_ = l->current_ws_indent_;
+    l->new_ws_indent_ = 0;
     return true;
 }
 
@@ -361,12 +361,11 @@ bool Lexer::PutNumberTokenAndChar(Lexer* l, char c) {
     return false;
 }
 
-Branch Lexer::transitions_[12][11] = {
+Branch Lexer::transitions_[11][11] = {
     /* newline                                whitespace                           underscore&alpha                           digit                                  sq (') mark                         dq (") mark                         comment (#)                                backslash (\)                                   maybe compare (=<>!)                        eof                                        other chars   */
-    {{State::NEW_LINE, Nop},                  {State::MAYBE_INDENT, CountWS},      {State::MAYBE_ID, PutIndentTokenAndChar}, {State::NUMBER, PutIndentTokenAndChar}, {State::STRING_SQ, PutIndentToken}, {State::STRING_DQ, PutIndentToken},  {State::LINE_COMMENT, Nop},                {State::OUT_STATE, PutIndentAndCharTokens}, {State::MAYBE_COMPARE, PutIndentTokenAndChar}, {State::OUT_STATE, Nop},                   {State::OUT_STATE, PutIndentAndCharTokens}}, // NEWLINE
-    {{State::NEW_LINE, DropIndent},           {State::MAYBE_INDENT, CountWS},      {State::MAYBE_ID, PutIndentTokenAndChar}, {State::NUMBER, PutIndentTokenAndChar}, {State::STRING_SQ, PutIndentToken}, {State::STRING_DQ, PutIndentToken},  {State::LINE_COMMENT, Nop},                {State::OUT_STATE, PutIndentAndCharTokens}, {State::MAYBE_COMPARE, PutIndentTokenAndChar}, {State::OUT_STATE, DropIndent},            {State::OUT_STATE, PutIndentAndCharTokens}}, // MAYBE_INDENT
+    {{State::NEW_LINE, DropIndent},           {State::NEW_LINE, CountWS},          {State::MAYBE_ID, PutIndentTokenAndChar}, {State::NUMBER, PutIndentTokenAndChar}, {State::STRING_SQ, PutIndentToken}, {State::STRING_DQ, PutIndentToken},  {State::LINE_COMMENT, Nop},                {State::OUT_STATE, PutIndentAndCharTokens}, {State::MAYBE_COMPARE, PutIndentTokenAndChar}, {State::OUT_STATE, DropIndent},            {State::OUT_STATE, PutIndentAndCharTokens}}, // NEWLINE
     {{State::NEW_LINE, PutIdAndNLTokens},     {State::OUT_STATE, PutIdToken},      {State::MAYBE_ID, PutChar},               {State::MAYBE_ID, PutChar},             {State::STRING_SQ, PutIdToken},     {State::STRING_DQ, PutIdToken},      {State::TRAILING_COMMENT, PutIdToken},     {State::OUT_STATE, PutIdAndCharTokens},     {State::MAYBE_COMPARE, PutIdTokenAndChar},     {State::OUT_STATE, PutIdAndNLTokens},      {State::OUT_STATE, PutIdAndCharTokens}},     // MAYBE_ID
-    {{State::NEW_LINE, PutCompAndNLTokens},   {State::OUT_STATE, PutBufCharToken}, {State::MAYBE_ID, PutCompTokenAndChar},   {State::NUMBER, PutCompTokenAndChar},   {State::STRING_SQ, PutCompToken},   {State::STRING_DQ, PutCompToken},    {State::TRAILING_COMMENT, PutCompToken},   {State::OUT_STATE, PutBufCharAndCharTokens},{State::OUT_STATE, PutCompToken},              {State::OUT_STATE, PutBufCharAndNLTokens}, {State::OUT_STATE, PutBufCharAndCharTokens}},   // MAYBE_COMPARE
+    {{State::NEW_LINE, PutCompAndNLTokens},   {State::OUT_STATE, PutBufCharToken}, {State::MAYBE_ID, PutCompTokenAndChar},   {State::NUMBER, PutCompTokenAndChar},   {State::STRING_SQ, PutCompToken},   {State::STRING_DQ, PutCompToken},    {State::TRAILING_COMMENT, PutCompToken},   {State::OUT_STATE, PutBufCharAndCharTokens},{State::OUT_STATE, PutCompToken},              {State::OUT_STATE, PutBufCharAndNLTokens}, {State::OUT_STATE, PutBufCharAndCharTokens}},// MAYBE_COMPARE
     {{State::NEW_LINE, PutNumberAndNLTokens}, {State::OUT_STATE, PutNumberToken},  {State::MAYBE_ID, PutNumberTokenAndChar}, {State::NUMBER, PutChar},               {State::STRING_SQ, PutNumberToken}, {State::STRING_DQ, PutNumberToken},  {State::TRAILING_COMMENT, PutNumberToken}, {State::OUT_STATE, PutNumberAndCharTokens}, {State::MAYBE_COMPARE, PutNumberTokenAndChar}, {State::OUT_STATE, PutNumberAndNLTokens},  {State::OUT_STATE, PutNumberAndCharTokens}}, // NUMBER
     {{State::OUT_STATE, Error},               {State::STRING_SQ, PutChar},         {State::STRING_SQ, PutChar},              {State::STRING_SQ, PutChar},            {State::OUT_STATE, PutStringToken}, {State::STRING_SQ, PutChar},         {State::STRING_SQ, PutChar},               {State::SQ_ESCAPE, Nop},                    {State::STRING_SQ, PutChar},                   {State::OUT_STATE, Error},                 {State::STRING_SQ, PutChar}},                // STRING_SQ
     {{State::OUT_STATE, Error},               {State::STRING_SQ, PutChar},         {State::STRING_SQ, PutControlChar},       {State::STRING_SQ, PutChar},            {State::STRING_SQ, PutChar},        {State::STRING_SQ, PutChar},         {State::STRING_SQ, PutChar},               {State::STRING_SQ, PutChar},                {State::STRING_SQ, PutChar},                   {State::OUT_STATE, Error},                 {State::STRING_SQ, PutChar}},                // SQ_ESCAPE
