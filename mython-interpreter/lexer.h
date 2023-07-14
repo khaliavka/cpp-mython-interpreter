@@ -1,7 +1,10 @@
 #pragma once
 
-#include <deque>
+#include <array>
+#include <queue>
 #include <iosfwd>
+#include <iostream>
+#include <memory>
 #include <optional>
 #include <sstream>
 #include <stdexcept>
@@ -88,27 +91,168 @@ public:
     using std::runtime_error::runtime_error;
 };
 
-static const int INDENT_SIZE = 2;
-
-enum class State {
-    NEW_LINE,
-    MAYBE_ID,
-    MAYBE_COMPARE,
-    NUMBER,
-    STRING_SQ,
-    SQ_ESCAPE,
-    STRING_DQ,
-    DQ_ESCAPE,
-    TRAILING_COMMENT,
-    LINE_COMMENT,
-    OUT_STATE
-};
+static constexpr int INDENT_SIZE_WS = 2;
+static constexpr int CHAR_BUF_SIZE = 5;
 
 class Lexer;
 
-struct Branch {
-    const State next_state;
-    bool (*action)(Lexer*, char);
+class State {
+public:
+    virtual bool FeedChar(Lexer* l, char c) = 0;
+
+protected:
+    static void ZeroNextWS();
+    static void NextWSIncrement();
+    static void ProcessIndentation(Lexer* l);
+
+
+private:
+
+    template <typename T>
+    static void PutIndentDedent(Lexer* l, T token, int count) {
+        for (int i = 0; i < count; ++i) {
+            l->PushToken(token);
+        }
+    }
+
+    static std::string::size_type next_indent_ws_;
+    static std::string::size_type current_indent_ws_;
+};
+
+class NewLine : public State {
+public:
+    static State* Instantiate();
+    bool FeedChar(Lexer* l, char c) override;
+
+private:
+    NewLine() = default;
+
+    static State* instance_;
+};
+
+class MayBeId : public State {
+public:
+    static State* Instantiate();
+    bool FeedChar(Lexer *l, char c) override;
+
+private:
+    MayBeId() = default;
+
+    void PushKeyWordOrId(Lexer* l);
+    static State* instance_;
+};
+
+class MayBeCompare : public State {
+public:
+    static State* Instantiate();
+    bool FeedChar(Lexer *l, char c) override;
+
+private:
+    MayBeCompare() = default;
+
+    static State* instance_;
+};
+
+class Number : public State {
+public:
+    static State* Instantiate();
+    bool FeedChar(Lexer *l, char c) override;
+
+private:
+    Number() = default;
+
+    void PushNumberToken(Lexer* l);
+    static State* instance_;
+};
+
+class SingleQuotationMark : public State {
+public:
+    static State* Instantiate();
+    bool FeedChar(Lexer *l, char c) override;
+
+private:
+    SingleQuotationMark() = default;
+
+    void Error();
+    static State* instance_;
+};
+
+class SingleQuotationMarkEscape : public State {
+public:
+    static State* Instantiate();
+    bool FeedChar(Lexer *l, char c) override;
+
+private:
+    SingleQuotationMarkEscape() = default;
+
+    static State* instance_;
+};
+
+class DoubleQuotationMark : public State {
+public:
+    static State* Instantiate();
+    bool FeedChar(Lexer *l, char c) override;
+
+private:
+    DoubleQuotationMark() = default;
+
+    void Error();
+    static State* instance_;
+};
+
+class DoubleQuotationMarkEscape : public State {
+public:
+    static State* Instantiate();
+    bool FeedChar(Lexer *l, char c) override;
+
+private:
+    DoubleQuotationMarkEscape() = default;
+
+    static State* instance_;
+};
+
+class TrailingComment : public State {
+public:
+    static State* Instantiate();
+    bool FeedChar(Lexer *l, char c) override;
+
+private:
+    TrailingComment() = default;
+
+    static State* instance_;
+};
+
+class LineComment : public State {
+public:
+    static State* Instantiate();
+    bool FeedChar(Lexer *l, char c) override;
+
+private:
+    LineComment() = default;
+
+    static State* instance_;
+};
+
+class OutState : public State {
+public:
+    static State* Instantiate();
+    bool FeedChar(Lexer *l, char c) override;
+
+private:
+    OutState() = default;
+
+    static State* instance_;
+};
+
+class EofState : public State {
+public:
+    static State* Instantiate();
+    bool FeedChar(Lexer *l, char) override;
+
+private:
+    EofState() = default;
+
+    static State* instance_;
 };
 
 class Lexer {
@@ -166,58 +310,82 @@ public:
     }
 
 private:
-    bool FeedChar(char c);
-    void InitTokenQueue();
+    bool FillBuffer();
+    void FeedChar();
+    void FeedQueue();
+
+    std::string MoveValue();
+    const std::string& GetValue();
+
+    void ClearValue();
+    void BeginNewValue(char c);
+    void PushChar(char c);
 
     template <typename T>
-    void PutIndentDedent(T token, int count);
+    void PushToken(T token) {
+        tokens_buffer_.push(std::move(token));
+    }
 
-    static bool Error(Lexer*, char);
-    static bool Nop(Lexer*, char);
-    static bool CountWS(Lexer* l, char);
-    static bool DropIndent(Lexer* l, char);
+    void SetState(State* s);
+    friend class State;
+    friend class NewLine;
+    friend class MayBeId;
+    friend class MayBeCompare;
+    friend class Number;
+    friend class SingleQuotationMark;
+    friend class SingleQuotationMarkEscape;
+    friend class DoubleQuotationMark;
+    friend class DoubleQuotationMarkEscape;
+    friend class TrailingComment;
+    friend class LineComment;
+    friend class OutState;
+    friend class EofState;
+//    template <typename T>
+//    void PutIndentDedent(T token, int count);
 
-    static bool PutNLToken(Lexer* l, char);
-    static bool PutIndentToken(Lexer* l, char);
-    static bool PutIdToken(Lexer* l, char);
-    static bool PutCharToken(Lexer* l, char c);
-    static bool PutBufCharToken(Lexer* l, char);
-    static bool PutCompToken(Lexer* l, char c);
-    static bool PutNumberToken(Lexer* l, char);
-    static bool PutStringToken(Lexer* l, char);
+//    static bool Error(Lexer*, char);
+//    static bool Nop(Lexer*, char);
+//    static bool CountWS(Lexer* l, char);
+//    static bool DropIndent(Lexer* l, char);
 
-    static bool PutIdAndNLTokens(Lexer* l, char);
-    static bool PutBufCharAndNLTokens(Lexer* l, char);
-    static bool PutCompAndNLTokens(Lexer* l, char);
-    static bool PutNumberAndNLTokens(Lexer* l, char);
+//    static bool PutNLToken(Lexer* l, char);
+//    static bool PutIndentToken(Lexer* l, char);
+//    static bool PutIdToken(Lexer* l, char);
+//    static bool PutCharToken(Lexer* l, char c);
+//    static bool PutBufCharToken(Lexer* l, char);
+//    static bool PutCompToken(Lexer* l, char c);
+//    static bool PutNumberToken(Lexer* l, char);
+//    static bool PutStringToken(Lexer* l, char);
 
-    static bool PutIndentAndCharTokens(Lexer* l, char c);
-    static bool PutIdAndCharTokens(Lexer* l, char c);
-    static bool PutNumberAndCharTokens(Lexer* l, char c);
-    static bool PutBufCharAndCharTokens(Lexer* l, char c);
+//    static bool PutIdAndNLTokens(Lexer* l, char);
+//    static bool PutBufCharAndNLTokens(Lexer* l, char);
+//    static bool PutCompAndNLTokens(Lexer* l, char);
+//    static bool PutNumberAndNLTokens(Lexer* l, char);
 
-    static bool PutChar(Lexer* l, char c);
-    static bool PutControlChar(Lexer* l, char c);
+//    static bool PutIndentAndCharTokens(Lexer* l, char c);
+//    static bool PutIdAndCharTokens(Lexer* l, char c);
+//    static bool PutNumberAndCharTokens(Lexer* l, char c);
+//    static bool PutBufCharAndCharTokens(Lexer* l, char c);
 
-    static bool PutIndentTokenAndChar(Lexer* l, char c);
-    static bool PutIdTokenAndChar(Lexer* l, char c);
-    static bool PutCompTokenAndChar(Lexer* l, char c);
-    static bool PutNumberTokenAndChar(Lexer* l, char c);
+//    static bool PutChar(Lexer* l, char c);
+//    static bool PutControlChar(Lexer* l, char c);
+
+//    static bool PutIndentTokenAndChar(Lexer* l, char c);
+//    static bool PutIdTokenAndChar(Lexer* l, char c);
+//    static bool PutCompTokenAndChar(Lexer* l, char c);
+//    static bool PutNumberTokenAndChar(Lexer* l, char c);
 
     std::istream& input_;
-    std::deque<Token> tokens_buf_;
-    std::string current_token_str_;
-    std::string::size_type current_ws_indent_;
-    std::string::size_type new_ws_indent_;
-    State state_;
-    static Branch transitions_[11][11];
+    std::array<char, CHAR_BUF_SIZE> char_buffer_;
+    std::size_t current_char_position_;
+    std::queue<Token> tokens_buffer_;
+    std::string value_;
+
+    State* state_;
 };
 
-template <typename T>
-void Lexer::PutIndentDedent(T token, int count) {
-    for (int i = 0; i < count; ++i) {
-        tokens_buf_.push_back(token);
-    }
-}
+
+
+
 
 }  // namespace parse

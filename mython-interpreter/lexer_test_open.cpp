@@ -9,6 +9,21 @@ using namespace std;
 namespace parse {
 
 namespace {
+
+void TestBufferedReading() {
+    {
+        istringstream input("abcdefg  hij"s);
+        Lexer lexer(input);
+        ASSERT_EQUAL(lexer.CurrentToken(), Token(token_type::Id{"abcdefg"}));
+        ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Id{"hij"}));
+    }
+    {
+        istringstream input(""s);
+        Lexer lexer(input);
+        ASSERT_EQUAL(lexer.CurrentToken(), Token(token_type::Eof{}));
+    }
+}
+
 void TestSimpleAssignment() {
     istringstream input("x = 42\n"s);
     Lexer lexer(input);
@@ -354,6 +369,7 @@ abc#
 }  // namespace
 
 void RunOpenLexerTests(TestRunner& tr) {
+    RUN_TEST(tr, parse::TestBufferedReading);
     RUN_TEST(tr, parse::TestSimpleAssignment);
     RUN_TEST(tr, parse::TestKeywords);
     RUN_TEST(tr, parse::TestNumbers);
