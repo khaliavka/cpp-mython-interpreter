@@ -93,8 +93,15 @@ public:
 
 static constexpr int INDENT_SIZE_WS = 2;
 static constexpr int CHAR_BUF_SIZE = 1024 * 512;
-
+static constexpr int SYMBOLS_COUNT = 10;
 class Lexer;
+class State;
+
+struct Branch {
+    State* next_state;
+    void (*action)(Lexer*, char);
+    bool to_continue;
+};
 
 class State {
 public:
@@ -104,7 +111,7 @@ protected:
     static void ZeroNextWS();
     static void NextWSIncrement();
     static void ProcessIndentation(Lexer* l);
-
+    static bool FeedCharInternal(Lexer*, const std::array<Branch, SYMBOLS_COUNT>&, char);
 
 private:
 
@@ -123,6 +130,14 @@ public:
 private:
     NewLine() = default;
 
+    static void ZeroWS(Lexer*, char);
+    static void NextWS(Lexer*, char);
+    static void BeginEof(Lexer* l, char);
+    static void BeginValue(Lexer* l, char c);
+    static void BeginString(Lexer*, char);
+    static void Default(Lexer* l, char c);
+
+    static const std::array<Branch, SYMBOLS_COUNT> transitions_;
     static State* instance_;
 };
 

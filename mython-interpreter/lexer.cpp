@@ -79,6 +79,23 @@ std::ostream& operator<<(std::ostream& os, const Token& rhs) {
 std::string::size_type State::next_indent_ws_ = 0;
 std::string::size_type State::current_indent_ws_ = 0;
 
+bool State::FeedCharInternal(Lexer* l, const std::array<Branch, SYMBOLS_COUNT>& transitions, char c) {
+    const int index = (c == '\n') ? 0 :
+                      std::isspace(c) ? 1 :
+                      (c == '#') ? 2 :
+                      (c == std::char_traits<char>::eof()) ? 3 :
+                      (c == '_' || std::isalpha(c)) ? 4 :
+                      std::isdigit(c) ? 5 :
+                      (c == '=' || c == '<' || c == '>' || c == '!') ? 6 :
+                      (c == '\'') ? 7 :
+                      (c == '"') ? 8 : 9;
+
+    const Branch& b = transitions[index];
+    b.action(l, c);
+    l->SetState(b.next_state);
+    return b.to_continue;
+}
+
 void State::NextWSIncrement() {
     ++next_indent_ws_;
 }
@@ -104,6 +121,18 @@ void State::ProcessIndentation(Lexer* l) {
 
 State* NewLine::instance_ = nullptr;
 
+const std::array<Branch, SYMBOLS_COUNT>
+    NewLine::transitions_{Branch{NewLine::Instantiate(), &ZeroWS, true},
+                          Branch{NewLine::Instantiate(), &NextWS, true},
+                          Branch{LineComment::Instantiate(), &ZeroWS, true},
+                          Branch{EofState::Instantiate(), &BeginEof, false},
+                          Branch{MayBeId::Instantiate(), &BeginValue, true},
+                          Branch{NumberState::Instantiate(), &BeginValue, true},
+                          Branch{MayBeCompare::Instantiate(), &BeginValue, true},
+                          Branch{SingleQuotationMark::Instantiate(), &BeginString, true},
+                          Branch{DoubleQuotationMark::Instantiate(), &BeginString, true},
+                          Branch{OutState::Instantiate(), &Default, false}};
+
 State* NewLine::Instantiate() {
     if (!instance_) {
         instance_ = new NewLine;
@@ -112,61 +141,91 @@ State* NewLine::Instantiate() {
 }
 
 bool NewLine::FeedChar(Lexer* l, char c) {
-    if (c == '\n') {
-        ZeroNextWS();
-        return true;
-    }
-    if (c == ' ') {
-        NextWSIncrement();
-        return true;
-    }
-    if (c == '#') {
-        ZeroNextWS();
-        l->SetState(LineComment::Instantiate());
-        return true;
-    }
-    if (c == std::char_traits<char>::eof()) {
-        ZeroNextWS();
-        ProcessIndentation(l);
-        l->PushToken(token_type::Eof{});
-        l->SetState((EofState::Instantiate()));
-        return false;
-    }
+    return FeedCharInternal(l, transitions_, c);
+//    if (c == '\n') {
+//        ZeroNextWS();
+//        return true;
+//    }
+//    if (c == ' ') {
+//        NextWSIncrement();
+//        return true;
+//    }
+//    if (c == '#') {
+//        ZeroNextWS();
+//        l->SetState(LineComment::Instantiate());
+//        return true;
+//    }
+//    if (c == std::char_traits<char>::eof()) {
+//        ZeroNextWS();
+//        ProcessIndentation(l);
+//        l->PushToken(token_type::Eof{});
+//        l->SetState((EofState::Instantiate()));
+//        return false;
+//    }
 
-    ProcessIndentation(l);
+//    ProcessIndentation(l);
 
-    if (c == '_' || std::isalpha(c)) {
-        l->BeginNewValue(c);
-        l->SetState(MayBeId::Instantiate());
-        return true;
-    }
-    if (std::isdigit(c)) {
-        l->BeginNewValue(c);
-        l->SetState(NumberState::Instantiate());
-        return true;
-    }
-    if (c == '=' || c == '<' || c == '>' || c == '!') {
-        l->BeginNewValue(c);
-        l->SetState(MayBeCompare::Instantiate());
-        return true;
-    }
-    if ( c == '\'') {
-        l->ClearValue();
-        l->SetState(SingleQuotationMark::Instantiate());
-        return true;
-    }
-    if (c == '"') {
-        l->ClearValue();
-        l->SetState(DoubleQuotationMark::Instantiate());
-        return true;
-    }
-    l->PushToken(token_type::Char{c});
-    l->SetState(OutState::Instantiate());
-    return false;
+//    if (c == '_' || std::isalpha(c)) {
+//        l->BeginNewValue(c);
+//        l->SetState(MayBeId::Instantiate());
+//        return true;
+//    }
+//    if (std::isdigit(c)) {
+//        l->BeginNewValue(c);
+//        l->SetState(NumberState::Instantiate());
+//        return true;
+//    }
+//    if (c == '=' || c == '<' || c == '>' || c == '!') {
+//        l->BeginNewValue(c);
+//        l->SetState(MayBeCompare::Instantiate());
+//        return true;
+//    }
+//    if (c == '\'') {
+//        l->ClearValue();
+//        l->SetState(SingleQuotationMark::Instantiate());
+//        return true;
+//    }
+//    if (c == '"') {
+//        l->ClearValue();
+//        l->SetState(DoubleQuotationMark::Instantiate());
+//        return true;
+//    }
+//    l->PushToken(token_type::Char{c});
+//    l->SetState(OutState::Instantiate());
+//    return false;
 }
 
+// -- NewLine Actions -- //
 
+void NewLine::ZeroWS(Lexer*, char) {
+    ZeroNextWS();
+}
 
+void NewLine::NextWS(Lexer*, char) {
+    NextWSIncrement();
+}
+
+void NewLine::BeginEof(Lexer* l, char) {
+    ZeroNextWS();
+    ProcessIndentation(l);
+    l->PushToken(token_type::Eof{});
+}
+
+void NewLine::BeginValue(Lexer* l, char c) {
+    ProcessIndentation(l);
+    l->BeginNewValue(c);
+}
+
+void NewLine::BeginString(Lexer* l, char) {
+    ProcessIndentation(l);
+    l->ClearValue();
+}
+
+void NewLine::Default(Lexer* l, char c) {
+    l->PushToken(token_type::Char{c});
+}
+
+// -- MayBeId -- //
 
 State* MayBeId::instance_ = nullptr;
 

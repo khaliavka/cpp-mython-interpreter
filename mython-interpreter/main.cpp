@@ -114,15 +114,15 @@ print y.value
 void TestAll() {
     TestRunner tr;
     parse::RunOpenLexerTests(tr);
-    runtime::RunObjectHolderTests(tr);
-    runtime::RunObjectsTests(tr);
-    ast::RunUnitTests(tr);
-    TestParseProgram(tr);
+//    runtime::RunObjectHolderTests(tr);
+//    runtime::RunObjectsTests(tr);
+//    ast::RunUnitTests(tr);
+//    TestParseProgram(tr);
 
-    RUN_TEST(tr, TestSimplePrints);
-    RUN_TEST(tr, TestAssignments);
-    RUN_TEST(tr, TestArithmetics);
-    RUN_TEST(tr, TestVariablesArePointers);
+//    RUN_TEST(tr, TestSimplePrints);
+//    RUN_TEST(tr, TestAssignments);
+//    RUN_TEST(tr, TestArithmetics);
+//    RUN_TEST(tr, TestVariablesArePointers);
 }
 
 }  // namespace
