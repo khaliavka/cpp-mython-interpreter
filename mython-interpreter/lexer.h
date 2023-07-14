@@ -92,7 +92,7 @@ public:
 };
 
 static constexpr int INDENT_SIZE_WS = 2;
-static constexpr int CHAR_BUF_SIZE = 5;
+static constexpr int CHAR_BUF_SIZE = 1024 * 512;
 
 class Lexer;
 
@@ -109,11 +109,7 @@ protected:
 private:
 
     template <typename T>
-    static void PutIndentDedent(Lexer* l, T token, int count) {
-        for (int i = 0; i < count; ++i) {
-            l->PushToken(token);
-        }
-    }
+    static void PutIndentDedent(Lexer* l, T token, int count);
 
     static std::string::size_type next_indent_ws_;
     static std::string::size_type current_indent_ws_;
@@ -153,13 +149,13 @@ private:
     static State* instance_;
 };
 
-class Number : public State {
+class NumberState : public State {
 public:
     static State* Instantiate();
     bool FeedChar(Lexer *l, char c) override;
 
 private:
-    Number() = default;
+    NumberState() = default;
 
     void PushNumberToken(Lexer* l);
     static State* instance_;
@@ -311,7 +307,6 @@ public:
 
 private:
     bool FillBuffer();
-    void FeedChar();
     void FeedQueue();
 
     std::string MoveValue();
@@ -331,7 +326,7 @@ private:
     friend class NewLine;
     friend class MayBeId;
     friend class MayBeCompare;
-    friend class Number;
+    friend class NumberState;
     friend class SingleQuotationMark;
     friend class SingleQuotationMarkEscape;
     friend class DoubleQuotationMark;
@@ -340,51 +335,22 @@ private:
     friend class LineComment;
     friend class OutState;
     friend class EofState;
-//    template <typename T>
-//    void PutIndentDedent(T token, int count);
-
-//    static bool Error(Lexer*, char);
-//    static bool Nop(Lexer*, char);
-//    static bool CountWS(Lexer* l, char);
-//    static bool DropIndent(Lexer* l, char);
-
-//    static bool PutNLToken(Lexer* l, char);
-//    static bool PutIndentToken(Lexer* l, char);
-//    static bool PutIdToken(Lexer* l, char);
-//    static bool PutCharToken(Lexer* l, char c);
-//    static bool PutBufCharToken(Lexer* l, char);
-//    static bool PutCompToken(Lexer* l, char c);
-//    static bool PutNumberToken(Lexer* l, char);
-//    static bool PutStringToken(Lexer* l, char);
-
-//    static bool PutIdAndNLTokens(Lexer* l, char);
-//    static bool PutBufCharAndNLTokens(Lexer* l, char);
-//    static bool PutCompAndNLTokens(Lexer* l, char);
-//    static bool PutNumberAndNLTokens(Lexer* l, char);
-
-//    static bool PutIndentAndCharTokens(Lexer* l, char c);
-//    static bool PutIdAndCharTokens(Lexer* l, char c);
-//    static bool PutNumberAndCharTokens(Lexer* l, char c);
-//    static bool PutBufCharAndCharTokens(Lexer* l, char c);
-
-//    static bool PutChar(Lexer* l, char c);
-//    static bool PutControlChar(Lexer* l, char c);
-
-//    static bool PutIndentTokenAndChar(Lexer* l, char c);
-//    static bool PutIdTokenAndChar(Lexer* l, char c);
-//    static bool PutCompTokenAndChar(Lexer* l, char c);
-//    static bool PutNumberTokenAndChar(Lexer* l, char c);
 
     std::istream& input_;
     std::array<char, CHAR_BUF_SIZE> char_buffer_;
-    std::size_t current_char_position_;
+    int current_char_position_;
     std::queue<Token> tokens_buffer_;
     std::string value_;
 
     State* state_;
 };
 
-
+template <typename T>
+void State::PutIndentDedent(Lexer* l, T token, int count) {
+    for (int i = 0; i < count; ++i) {
+        l->PushToken(token);
+    }
+}
 
 
 

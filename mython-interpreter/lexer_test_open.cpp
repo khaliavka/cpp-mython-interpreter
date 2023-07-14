@@ -321,6 +321,22 @@ void TestAlwaysEmitsNewlineAtTheEndOfNonemptyLine() {
         ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Eof{}));
         ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Eof{}));
         ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Eof{}));
+        ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Eof{}));
+        ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Eof{}));
+        ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Eof{}));
+    }
+    {
+        istringstream is("4 2"s);
+        Lexer lexer(is);
+
+        ASSERT_EQUAL(lexer.CurrentToken(), Token(token_type::Number{4}));
+        ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Number{2}));
+        ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Newline{}));
+        ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Eof{}));
+        ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Eof{}));
+        ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Eof{}));
+        ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Eof{}));
+        ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Eof{}));
     }
     {
         istringstream is("+"s);
@@ -328,6 +344,43 @@ void TestAlwaysEmitsNewlineAtTheEndOfNonemptyLine() {
 
         ASSERT_EQUAL(lexer.CurrentToken(), Token(token_type::Char{'+'}));
         ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Newline{}));
+        ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Eof{}));
+        ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Eof{}));
+        ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Eof{}));
+        ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Eof{}));
+        ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Eof{}));
+    }
+    {
+        istringstream is("!=<="s);
+        Lexer lexer(is);
+
+        ASSERT_EQUAL(lexer.CurrentToken(), Token(token_type::NotEq{}));
+        ASSERT_EQUAL(lexer.NextToken(), Token(token_type::LessOrEq{}));
+        ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Newline{}));
+        ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Eof{}));
+        ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Eof{}));
+        ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Eof{}));
+        ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Eof{}));
+        ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Eof{}));
+    }
+    {
+        istringstream is("#abc"s);
+        Lexer lexer(is);
+
+        ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Eof{}));
+        ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Eof{}));
+        ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Eof{}));
+        ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Eof{}));
+        ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Eof{}));
+    }
+    {
+        istringstream is(""s);
+        Lexer lexer(is);
+
+        ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Eof{}));
+        ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Eof{}));
+        ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Eof{}));
+        ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Eof{}));
         ASSERT_EQUAL(lexer.NextToken(), Token(token_type::Eof{}));
     }
 }
