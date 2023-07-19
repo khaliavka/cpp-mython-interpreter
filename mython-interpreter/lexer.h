@@ -92,26 +92,26 @@ public:
 };
 
 static constexpr int INDENT_SIZE_WS = 2;
-static constexpr int CHAR_BUF_SIZE = 1024 * 512;
-static constexpr int SYMBOLS_COUNT = 10;
+static constexpr int CHAR_BUF_SIZE = 1024;
+static constexpr int SYMBOLS_COUNT = 11;
 class Lexer;
 class State;
 
 struct Branch {
     State* next_state;
     void (*action)(Lexer*, char);
-    bool to_continue;
 };
 
 class State {
 public:
-    virtual bool FeedChar(Lexer* l, char c) = 0;
+    virtual void FeedChar(Lexer* l, char c) = 0;
 
 protected:
+    static void Nop(Lexer*, char);
     static void ZeroNextWS();
     static void NextWSIncrement();
     static void ProcessIndentation(Lexer* l);
-    static bool FeedCharInternal(Lexer*, const std::array<Branch, SYMBOLS_COUNT>&, char);
+    static void FeedCharInternal(Lexer*, const std::array<Branch, SYMBOLS_COUNT>&, char);
 
 private:
 
@@ -125,7 +125,7 @@ private:
 class NewLine : public State {
 public:
     static State* Instantiate();
-    bool FeedChar(Lexer* l, char c) override;
+    void FeedChar(Lexer* l, char c) override;
 
 private:
     NewLine() = default;
@@ -133,9 +133,9 @@ private:
     static void ZeroWS(Lexer*, char);
     static void NextWS(Lexer*, char);
     static void BeginEof(Lexer* l, char);
-    static void BeginValue(Lexer* l, char c);
+    static void BeginValue(Lexer* l, char);
     static void BeginString(Lexer*, char);
-    static void Default(Lexer* l, char c);
+    static void Default(Lexer* l, char);
 
     static const std::array<Branch, SYMBOLS_COUNT> transitions_;
     static State* instance_;
@@ -144,54 +144,86 @@ private:
 class MayBeId : public State {
 public:
     static State* Instantiate();
-    bool FeedChar(Lexer *l, char c) override;
+    void FeedChar(Lexer *l, char c) override;
 
 private:
     MayBeId() = default;
 
-    void PushKeyWordOrId(Lexer* l);
+    static void BeginNewLine(Lexer* l, char c);
+    static void PushId(Lexer* l, char c);
+    static void OnEof(Lexer* l, char c);
+    static void ContinueId(Lexer* l, char c);
+    static void BeginNewValue(Lexer* l, char c);
+    static void ClearPreviousValue(Lexer* l, char c);
+    static void Default(Lexer* l, char c);
+
+    static void PushKeyWordOrId(Lexer* l);
+
+    static const std::array<Branch, SYMBOLS_COUNT> transitions_;
     static State* instance_;
 };
 
 class MayBeCompare : public State {
 public:
     static State* Instantiate();
-    bool FeedChar(Lexer *l, char c) override;
+    void FeedChar(Lexer *l, char c) override;
 
 private:
     MayBeCompare() = default;
 
+    static void PushCompareToken(Lexer*, char);
+    static void PushCompareInternal(Lexer*, char);
+    static void BeginNewLine(Lexer*, char);
+    static void PushPrevChar(Lexer*, char);
+    static void OnEof(Lexer*, char);
+    static void BeginNewValue(Lexer*, char);
+    static void ClearValue(Lexer*, char);
+    static void Default(Lexer*, char);
+
+    static const std::array<Branch, SYMBOLS_COUNT> transitions_;
     static State* instance_;
 };
 
 class NumberState : public State {
 public:
     static State* Instantiate();
-    bool FeedChar(Lexer *l, char c) override;
+    void FeedChar(Lexer *l, char c) override;
 
 private:
     NumberState() = default;
 
-    void PushNumberToken(Lexer* l);
+    static void BeginNewLine(Lexer* l, char c);
+    static void PushNumberToken(Lexer*, char);
+    static void OnEof(Lexer* l, char c);
+    static void BeginNewValue(Lexer* l, char c);
+    static void ContinueNumber(Lexer* l, char c);
+    static void ClearValue(Lexer* l, char);
+    static void Default(Lexer* l, char c);
+
+    static const std::array<Branch, SYMBOLS_COUNT> transitions_;
     static State* instance_;
 };
 
 class SingleQuotationMark : public State {
 public:
     static State* Instantiate();
-    bool FeedChar(Lexer *l, char c) override;
+    void FeedChar(Lexer *l, char c) override;
 
 private:
     SingleQuotationMark() = default;
 
-    void Error();
+    static void Error(Lexer*, char);
+    static void PushToken(Lexer*, char);
+    static void Default(Lexer*, char);
+
+    static const std::array<Branch, SYMBOLS_COUNT> transitions_;
     static State* instance_;
 };
 
 class SingleQuotationMarkEscape : public State {
 public:
     static State* Instantiate();
-    bool FeedChar(Lexer *l, char c) override;
+    void FeedChar(Lexer *l, char c) override;
 
 private:
     SingleQuotationMarkEscape() = default;
@@ -202,19 +234,23 @@ private:
 class DoubleQuotationMark : public State {
 public:
     static State* Instantiate();
-    bool FeedChar(Lexer *l, char c) override;
+    void FeedChar(Lexer *l, char c) override;
 
 private:
     DoubleQuotationMark() = default;
 
-    void Error();
+    static void Error(Lexer*, char);
+    static void PushToken(Lexer*, char);
+    static void Default(Lexer*, char);
+
+    static const std::array<Branch, SYMBOLS_COUNT> transitions_;
     static State* instance_;
 };
 
 class DoubleQuotationMarkEscape : public State {
 public:
     static State* Instantiate();
-    bool FeedChar(Lexer *l, char c) override;
+    void FeedChar(Lexer *l, char c) override;
 
 private:
     DoubleQuotationMarkEscape() = default;
@@ -225,7 +261,7 @@ private:
 class TrailingComment : public State {
 public:
     static State* Instantiate();
-    bool FeedChar(Lexer *l, char c) override;
+    void FeedChar(Lexer *l, char c) override;
 
 private:
     TrailingComment() = default;
@@ -236,7 +272,7 @@ private:
 class LineComment : public State {
 public:
     static State* Instantiate();
-    bool FeedChar(Lexer *l, char c) override;
+    void FeedChar(Lexer *l, char c) override;
 
 private:
     LineComment() = default;
@@ -247,24 +283,32 @@ private:
 class OutState : public State {
 public:
     static State* Instantiate();
-    bool FeedChar(Lexer *l, char c) override;
+    void FeedChar(Lexer *l, char c) override;
 
 private:
     OutState() = default;
 
+    static void BeginNewLine(Lexer* l, char);
+    static void OnEof(Lexer* l, char);
+    static void BeginNewValue(Lexer* l, char c);
+    static void ClearValue(Lexer* l, char);
+    static void Default(Lexer* l, char c);
+
+    static const std::array<Branch, SYMBOLS_COUNT> transitions_;
     static State* instance_;
 };
 
 class EofState : public State {
 public:
     static State* Instantiate();
-    bool FeedChar(Lexer *l, char) override;
+    void FeedChar(Lexer *l, char) override;
 
 private:
     EofState() = default;
 
     static State* instance_;
 };
+
 
 class Lexer {
 public:
@@ -337,6 +381,7 @@ private:
     }
 
     void SetState(State* s);
+
     friend class State;
     friend class NewLine;
     friend class MayBeId;

@@ -79,7 +79,7 @@ std::ostream& operator<<(std::ostream& os, const Token& rhs) {
 std::string::size_type State::next_indent_ws_ = 0;
 std::string::size_type State::current_indent_ws_ = 0;
 
-bool State::FeedCharInternal(Lexer* l, const std::array<Branch, SYMBOLS_COUNT>& transitions, char c) {
+void State::FeedCharInternal(Lexer* l, const std::array<Branch, SYMBOLS_COUNT>& transitions, char c) {
     const int index = (c == '\n') ? 0 :
                       std::isspace(c) ? 1 :
                       (c == '#') ? 2 :
@@ -88,12 +88,16 @@ bool State::FeedCharInternal(Lexer* l, const std::array<Branch, SYMBOLS_COUNT>& 
                       std::isdigit(c) ? 5 :
                       (c == '=' || c == '<' || c == '>' || c == '!') ? 6 :
                       (c == '\'') ? 7 :
-                      (c == '"') ? 8 : 9;
+                      (c == '"') ? 8 :
+                      (c == '\\') ? 9 : 10;
 
     const Branch& b = transitions[index];
     b.action(l, c);
     l->SetState(b.next_state);
-    return b.to_continue;
+}
+
+void State::Nop(Lexer*, char) {
+    // Nop
 }
 
 void State::NextWSIncrement() {
@@ -122,16 +126,17 @@ void State::ProcessIndentation(Lexer* l) {
 State* NewLine::instance_ = nullptr;
 
 const std::array<Branch, SYMBOLS_COUNT>
-    NewLine::transitions_{Branch{NewLine::Instantiate(), &ZeroWS, true},
-                          Branch{NewLine::Instantiate(), &NextWS, true},
-                          Branch{LineComment::Instantiate(), &ZeroWS, true},
-                          Branch{EofState::Instantiate(), &BeginEof, false},
-                          Branch{MayBeId::Instantiate(), &BeginValue, true},
-                          Branch{NumberState::Instantiate(), &BeginValue, true},
-                          Branch{MayBeCompare::Instantiate(), &BeginValue, true},
-                          Branch{SingleQuotationMark::Instantiate(), &BeginString, true},
-                          Branch{DoubleQuotationMark::Instantiate(), &BeginString, true},
-                          Branch{OutState::Instantiate(), &Default, false}};
+    NewLine::transitions_{Branch{NewLine::Instantiate(), &ZeroWS},
+                          Branch{NewLine::Instantiate(), &NextWS},
+                          Branch{LineComment::Instantiate(), &ZeroWS},
+                          Branch{EofState::Instantiate(), &BeginEof},
+                          Branch{MayBeId::Instantiate(), &BeginValue},
+                          Branch{NumberState::Instantiate(), &BeginValue},
+                          Branch{MayBeCompare::Instantiate(), &BeginValue},
+                          Branch{SingleQuotationMark::Instantiate(), &BeginString},
+                          Branch{DoubleQuotationMark::Instantiate(), &BeginString},
+                          Branch{OutState::Instantiate(), &Default},
+                          Branch{OutState::Instantiate(), &Default}};
 
 State* NewLine::Instantiate() {
     if (!instance_) {
@@ -140,59 +145,8 @@ State* NewLine::Instantiate() {
     return instance_;
 }
 
-bool NewLine::FeedChar(Lexer* l, char c) {
-    return FeedCharInternal(l, transitions_, c);
-//    if (c == '\n') {
-//        ZeroNextWS();
-//        return true;
-//    }
-//    if (c == ' ') {
-//        NextWSIncrement();
-//        return true;
-//    }
-//    if (c == '#') {
-//        ZeroNextWS();
-//        l->SetState(LineComment::Instantiate());
-//        return true;
-//    }
-//    if (c == std::char_traits<char>::eof()) {
-//        ZeroNextWS();
-//        ProcessIndentation(l);
-//        l->PushToken(token_type::Eof{});
-//        l->SetState((EofState::Instantiate()));
-//        return false;
-//    }
-
-//    ProcessIndentation(l);
-
-//    if (c == '_' || std::isalpha(c)) {
-//        l->BeginNewValue(c);
-//        l->SetState(MayBeId::Instantiate());
-//        return true;
-//    }
-//    if (std::isdigit(c)) {
-//        l->BeginNewValue(c);
-//        l->SetState(NumberState::Instantiate());
-//        return true;
-//    }
-//    if (c == '=' || c == '<' || c == '>' || c == '!') {
-//        l->BeginNewValue(c);
-//        l->SetState(MayBeCompare::Instantiate());
-//        return true;
-//    }
-//    if (c == '\'') {
-//        l->ClearValue();
-//        l->SetState(SingleQuotationMark::Instantiate());
-//        return true;
-//    }
-//    if (c == '"') {
-//        l->ClearValue();
-//        l->SetState(DoubleQuotationMark::Instantiate());
-//        return true;
-//    }
-//    l->PushToken(token_type::Char{c});
-//    l->SetState(OutState::Instantiate());
-//    return false;
+void NewLine::FeedChar(Lexer* l, char c) {
+    FeedCharInternal(l, transitions_, c);
 }
 
 // -- NewLine Actions -- //
@@ -229,6 +183,18 @@ void NewLine::Default(Lexer* l, char c) {
 
 State* MayBeId::instance_ = nullptr;
 
+const std::array<Branch, SYMBOLS_COUNT> MayBeId::transitions_{Branch{NewLine::Instantiate(), &BeginNewLine},
+                                                              Branch{OutState::Instantiate(), &PushId},
+                                                              Branch{TrailingComment::Instantiate(), &PushId},
+                                                              Branch{EofState::Instantiate(), &OnEof},
+                                                              Branch{MayBeId::Instantiate(), &ContinueId},
+                                                              Branch{MayBeId::Instantiate(), &ContinueId},
+                                                              Branch{MayBeCompare::Instantiate(), &BeginNewValue},
+                                                              Branch{SingleQuotationMark::Instantiate(), &ClearPreviousValue},
+                                                              Branch{DoubleQuotationMark::Instantiate(), &ClearPreviousValue},
+                                                              Branch{OutState::Instantiate(), &Default},
+                                                              Branch{OutState::Instantiate(), &Default}};
+
 State* MayBeId::Instantiate() {
     if (!instance_) {
         instance_ = new MayBeId;
@@ -236,52 +202,8 @@ State* MayBeId::Instantiate() {
     return instance_;
 }
 
-bool MayBeId::FeedChar(Lexer *l, char c) {
-    if (c == '_' || std::isalpha(c) || std::isdigit(c)) {
-        l->PushChar(c);
-        return true;
-    }
-
-    PushKeyWordOrId(l);
-
-    if (c == '\n') {
-        l->PushToken(token_type::Newline{});
-        l->SetState(NewLine::Instantiate());
-        return false;
-    }
-    if (c == ' ') {
-        l->SetState(OutState::Instantiate());
-        return false;
-    }
-    if (c == '#') {
-        l->SetState(TrailingComment::Instantiate());
-        return false;
-    }
-    if (c == std::char_traits<char>::eof()) {
-        l->PushToken(token_type::Newline{});
-        ProcessIndentation(l);
-        l->PushToken(token_type::Eof{});
-        l->SetState(EofState::Instantiate());
-        return false;
-    }
-    if (c == '=' || c == '<' || c == '>' || c == '!') {
-        l->BeginNewValue(c);
-        l->SetState(MayBeCompare::Instantiate());
-        return false;
-    }
-    if (c == '\'') {
-        l->ClearValue();
-        l->SetState(SingleQuotationMark::Instantiate());
-        return false;
-    }
-    if (c == '"') {
-        l->ClearValue();
-        l->SetState(DoubleQuotationMark::Instantiate());
-        return false;
-    }
-    l->PushToken(token_type::Char{c});
-    l->SetState(OutState::Instantiate());
-    return false;
+void MayBeId::FeedChar(Lexer *l, char c) {
+    FeedCharInternal(l, transitions_, c);
 }
 
 void MayBeId::PushKeyWordOrId(Lexer* l) {
@@ -316,8 +238,54 @@ void MayBeId::PushKeyWordOrId(Lexer* l) {
     }
 }
 
+void MayBeId::BeginNewLine(Lexer* l, char) {
+    PushKeyWordOrId(l);
+    l->PushToken(token_type::Newline{});
+}
+
+void MayBeId::PushId(Lexer* l, char) {
+    PushKeyWordOrId(l);
+}
+
+void MayBeId::OnEof(Lexer* l, char) {
+    PushKeyWordOrId(l);
+    l->PushToken(token_type::Newline{});
+    ProcessIndentation(l);
+    l->PushToken(token_type::Eof{});
+}
+
+void MayBeId::ContinueId(Lexer* l, char c) {
+    l->PushChar(c);
+}
+
+void MayBeId::BeginNewValue(Lexer* l, char c) {
+    PushKeyWordOrId(l);
+    l->BeginNewValue(c);
+}
+
+void MayBeId::ClearPreviousValue(Lexer* l, char) {
+    PushKeyWordOrId(l);
+    l->ClearValue();
+}
+
+void MayBeId::Default(Lexer* l, char c) {
+    PushKeyWordOrId((l));
+    l->PushToken(token_type::Char{c});
+}
 
 State* MayBeCompare::instance_ = nullptr;
+
+const std::array<Branch, SYMBOLS_COUNT> MayBeCompare::transitions_{Branch{NewLine::Instantiate(), &BeginNewLine},
+                                                                   Branch{OutState::Instantiate(), &PushPrevChar},
+                                                                   Branch{TrailingComment::Instantiate(), &PushPrevChar},
+                                                                   Branch{EofState::Instantiate(), &OnEof},
+                                                                   Branch{MayBeId::Instantiate(), &BeginNewValue},
+                                                                   Branch{NumberState::Instantiate(), &BeginNewValue},
+                                                                   Branch{OutState::Instantiate(), &PushCompareToken},
+                                                                   Branch{SingleQuotationMark::Instantiate(), &ClearValue},
+                                                                   Branch{DoubleQuotationMark::Instantiate(), &ClearValue},
+                                                                   Branch{OutState::Instantiate(), &Default},
+                                                                   Branch{OutState::Instantiate(), &Default}};
 
 State* MayBeCompare::Instantiate() {
     if (!instance_) {
@@ -326,71 +294,78 @@ State* MayBeCompare::Instantiate() {
     return instance_;
 }
 
-bool MayBeCompare::FeedChar(Lexer *l, char c) {
-    const auto prev_c = l->GetValue()[0];
-    if (c == '=') {
-        if (prev_c == '=') {
-            l->PushToken(token_type::Eq{});
-        } else if (prev_c == '!') {
-            l->PushToken(token_type::NotEq{});
-        } else if (prev_c == '<') {
-            l->PushToken(token_type::LessOrEq{});
-        } else { // '>'
-            l->PushToken(token_type::GreaterOrEq{});
-        }
-        l->SetState(OutState::Instantiate());
-        return false;
-    }
-
-    l->PushToken(token_type::Char{prev_c});
-
-    if (c == '\n') {
-        l->PushToken(token_type::Newline{});
-        l->SetState(NewLine::Instantiate());
-        return false;
-    }
-    if (c == ' ') {
-        l->SetState(OutState::Instantiate());
-        return false;
-    }
-    if (c == '#') {
-        l->SetState(TrailingComment::Instantiate());
-        return false;
-    }
-    if (c == std::char_traits<char>::eof()) {
-        l->PushToken(token_type::Newline{});
-        ProcessIndentation(l);
-        l->PushToken(token_type::Eof{});
-        l->SetState(EofState::Instantiate());
-        return false;
-    }
-    if (c == '_' || std::isalpha(c)) {
-        l->BeginNewValue(c);
-        l->SetState(MayBeId::Instantiate());
-        return false;
-    }
-    if (std::isdigit(c)) {
-        l->BeginNewValue(c);
-        l->SetState(NumberState::Instantiate());
-        return false;
-    }
-    if (c == '\'') {
-        l->ClearValue();
-        l->SetState(SingleQuotationMark::Instantiate());
-        return false;
-    }
-    if (c == '"') {
-        l->ClearValue();
-        l->SetState(DoubleQuotationMark::Instantiate());
-        return false;
-    }
-    l->PushToken(token_type::Char{c});
-    l->SetState(OutState::Instantiate());
-    return false;
+void MayBeCompare::FeedChar(Lexer *l, char c) {
+    FeedCharInternal(l, transitions_, c);
 }
 
+void MayBeCompare::PushCompareToken(Lexer* l, char c) {
+    if (c == '=') {
+        PushCompareInternal(l, c);
+    } else {
+        Default(l, c);
+    }
+}
+
+void MayBeCompare::PushCompareInternal(Lexer* l, char) {
+    const auto prev_c = l->GetValue()[0];
+    if (prev_c == '=') {
+        l->PushToken(token_type::Eq{});
+    } else if (prev_c == '!') {
+        l->PushToken(token_type::NotEq{});
+    } else if (prev_c == '<') {
+        l->PushToken(token_type::LessOrEq{});
+    } else { // '>'
+        l->PushToken(token_type::GreaterOrEq{});
+    }
+    l->ClearValue();
+}
+
+void MayBeCompare::BeginNewLine(Lexer* l, char) {
+    l->PushToken(token_type::Char{l->GetValue()[0]});
+    l->ClearValue();
+    l->PushToken(token_type::Newline{});
+}
+
+void MayBeCompare::PushPrevChar(Lexer* l, char) {
+    l->PushToken(token_type::Char{l->GetValue()[0]});
+    l->ClearValue();
+}
+
+void MayBeCompare::OnEof(Lexer* l, char) {
+    l->PushToken(token_type::Char{l->GetValue()[0]});
+    l->PushToken(token_type::Newline{});
+    ProcessIndentation(l);
+    l->PushToken(token_type::Eof{});
+}
+
+void MayBeCompare::BeginNewValue(Lexer* l, char c) {
+    l->PushToken(token_type::Char{l->GetValue()[0]});
+    l->BeginNewValue(c);
+}
+
+void MayBeCompare::ClearValue(Lexer* l, char) {
+    l->PushToken(token_type::Char{l->GetValue()[0]});
+    l->ClearValue();
+}
+
+void MayBeCompare::Default(Lexer* l, char c) {
+    PushPrevChar(l, c);
+    l->PushToken(token_type::Char{c});
+}
 
 State* NumberState::instance_ = nullptr;
+
+const std::array<Branch, SYMBOLS_COUNT> NumberState::transitions_{Branch{NewLine::Instantiate(), &BeginNewLine},
+                                                                  Branch{OutState::Instantiate(), &PushNumberToken},
+                                                                  Branch{TrailingComment::Instantiate(), &PushNumberToken},
+                                                                  Branch{EofState::Instantiate(), &OnEof},
+                                                                  Branch{MayBeId::Instantiate(), &BeginNewValue},
+                                                                  Branch{NumberState::Instantiate(), &ContinueNumber},
+                                                                  Branch{MayBeCompare::Instantiate(), &BeginNewValue},
+                                                                  Branch{SingleQuotationMark::Instantiate(), &ClearValue},
+                                                                  Branch{DoubleQuotationMark::Instantiate(), &ClearValue},
+                                                                  Branch{OutState::Instantiate(), &Default},
+                                                                  Branch{OutState::Instantiate(), &Default}};
 
 State* NumberState::Instantiate() {
     if (!instance_) {
@@ -399,60 +374,16 @@ State* NumberState::Instantiate() {
     return instance_;
 }
 
-bool NumberState::FeedChar(Lexer *l, char c) {
-    if (std::isdigit(c)) {
-        l->PushChar(c);
-        return true;
-    }
-
-    PushNumberToken(l);
-
-    if (c == '\n') {
-        l->PushToken(token_type::Newline{});
-        l->SetState(NewLine::Instantiate());
-        return false;
-    }
-    if (c == ' ') {
-        l->SetState(OutState::Instantiate());
-        return false;
-    }
-    if (c == '#') {
-        l->SetState(TrailingComment::Instantiate());
-        return false;
-    }
-    if (c == std::char_traits<char>::eof()) {
-        l->PushToken(token_type::Newline{});
-        ProcessIndentation(l);
-        l->PushToken(token_type::Eof{});
-        l->SetState(EofState::Instantiate());
-        return false;
-    }
-    if (c == '_' || std::isalpha(c)) {
-        l->BeginNewValue(c);
-        l->SetState(MayBeId::Instantiate());
-        return false;
-    }
-    if (c == '=' || c == '<' || c == '>' || c == '!') {
-        l->BeginNewValue(c);
-        l->SetState(MayBeCompare::Instantiate());
-        return false;
-    }
-    if (c == '\'') {
-        l->ClearValue();
-        l->SetState(SingleQuotationMark::Instantiate());
-        return false;
-    }
-    if (c == '"') {
-        l->ClearValue();
-        l->SetState(DoubleQuotationMark::Instantiate());
-        return false;
-    }
-    l->PushToken(token_type::Char{c});
-    l->SetState(OutState::Instantiate());
-    return false;
+void NumberState::FeedChar(Lexer *l, char c) {
+    FeedCharInternal(l, transitions_, c);
 }
 
-void NumberState::PushNumberToken(Lexer* l) {
+void NumberState::BeginNewLine(Lexer* l, char c) {
+    PushNumberToken(l, c);
+    l->PushToken(token_type::Newline{});
+}
+
+void NumberState::PushNumberToken(Lexer* l, char) {
     int num;
     const char* first = l->GetValue().data();
     const char* last = first + l->GetValue().size();
@@ -460,7 +391,44 @@ void NumberState::PushNumberToken(Lexer* l) {
     l->PushToken(token_type::Number{num});
 }
 
+void NumberState::OnEof(Lexer* l, char c) {
+    PushNumberToken(l, c);
+    l->PushToken(token_type::Newline{});
+    ProcessIndentation(l);
+    l->PushToken(token_type::Eof{});
+}
+
+void NumberState::BeginNewValue(Lexer* l, char c) {
+    PushNumberToken(l, c);
+    l->BeginNewValue(c);
+}
+
+void NumberState::ContinueNumber(Lexer* l, char c) {
+    l->PushChar(c);
+}
+
+void NumberState::ClearValue(Lexer* l, char) {
+    l->ClearValue();
+}
+
+void NumberState::Default(Lexer* l, char c) {
+    PushNumberToken(l, c);
+    l->PushToken(token_type::Char{c});
+}
+
 State* SingleQuotationMark::instance_ = nullptr;
+
+const std::array<Branch, SYMBOLS_COUNT> SingleQuotationMark::transitions_{Branch{EofState::Instantiate(), &Error},
+                                                                          Branch{SingleQuotationMark::Instantiate(), &Default},
+                                                                          Branch{SingleQuotationMark::Instantiate(), &Default},
+                                                                          Branch{EofState::Instantiate(), &Error},
+                                                                          Branch{SingleQuotationMark::Instantiate(), &Default},
+                                                                          Branch{SingleQuotationMark::Instantiate(), &Default},
+                                                                          Branch{SingleQuotationMark::Instantiate(), &Default},
+                                                                          Branch{OutState::Instantiate(), &PushToken},
+                                                                          Branch{SingleQuotationMark::Instantiate(), &Default},
+                                                                          Branch{SingleQuotationMarkEscape::Instantiate(), &Nop},
+                                                                          Branch{SingleQuotationMark::Instantiate(), &Default}};
 
 State* SingleQuotationMark::Instantiate() {
     if (!instance_) {
@@ -469,29 +437,21 @@ State* SingleQuotationMark::Instantiate() {
     return instance_;
 }
 
-bool SingleQuotationMark::FeedChar(Lexer *l, char c) {
-    if (c == '\n' || c == std::char_traits<char>::eof()) {
-        Error();
-        l->SetState(EofState::Instantiate());
-        return false;
-    }
-    if (c == '\'') {
-        l->PushToken(token_type::String{std::move(l->MoveValue())});
-        l->SetState(OutState::Instantiate());
-        return false;
-    }
-    if (c == '\\') {
-        // Nop
-        l->SetState(SingleQuotationMarkEscape::Instantiate());
-        return true;
-    }
-    l->PushChar(c);
-    return true;
+void SingleQuotationMark::FeedChar(Lexer *l, char c) {
+    FeedCharInternal(l, transitions_, c);
 }
 
-void SingleQuotationMark::Error() {
+void SingleQuotationMark::Error(Lexer*, char) {
     using namespace std::literals;
     throw LexerError("Ivalid lexeme"s);
+}
+
+void SingleQuotationMark::PushToken(Lexer* l, char) {
+    l->PushToken(token_type::String{std::move(l->MoveValue())});
+}
+
+void SingleQuotationMark::Default(Lexer* l, char c) {
+    l->PushChar(c);
 }
 
 State* SingleQuotationMarkEscape::instance_ = nullptr;
@@ -503,7 +463,7 @@ State* SingleQuotationMarkEscape::Instantiate() {
     return instance_;
 }
 
-bool SingleQuotationMarkEscape::FeedChar(Lexer *l, char c) {
+void SingleQuotationMarkEscape::FeedChar(Lexer *l, char c) {
     if (c == 'n') {
         c = '\n';
     }
@@ -512,10 +472,21 @@ bool SingleQuotationMarkEscape::FeedChar(Lexer *l, char c) {
     }
     l->PushChar(c);
     l->SetState(SingleQuotationMark::Instantiate());
-    return true;
 }
 
 State* DoubleQuotationMark::instance_ = nullptr;
+
+const std::array<Branch, SYMBOLS_COUNT> DoubleQuotationMark::transitions_{Branch{EofState::Instantiate(), &Error},
+                                                                          Branch{DoubleQuotationMark::Instantiate(), &Default},
+                                                                          Branch{DoubleQuotationMark::Instantiate(), &Default},
+                                                                          Branch{EofState::Instantiate(), &Error},
+                                                                          Branch{DoubleQuotationMark::Instantiate(), &Default},
+                                                                          Branch{DoubleQuotationMark::Instantiate(), &Default},
+                                                                          Branch{DoubleQuotationMark::Instantiate(), &Default},
+                                                                          Branch{DoubleQuotationMark::Instantiate(), &Default},
+                                                                          Branch{OutState::Instantiate(), &PushToken},
+                                                                          Branch{DoubleQuotationMarkEscape::Instantiate(), &Nop},
+                                                                          Branch{DoubleQuotationMark::Instantiate(), &Default}};
 
 State* DoubleQuotationMark::Instantiate() {
     if (!instance_) {
@@ -524,29 +495,21 @@ State* DoubleQuotationMark::Instantiate() {
     return instance_;
 }
 
-bool DoubleQuotationMark::FeedChar(Lexer *l, char c) {
-    if (c == '\n' || c == std::char_traits<char>::eof()) {
-        Error();
-        l->SetState(EofState::Instantiate());
-        return false;
-    }
-    if (c == '"') {
-        l->PushToken(token_type::String{std::move(l->MoveValue())});
-        l->SetState(OutState::Instantiate());
-        return false;
-    }
-    if (c == '\\') {
-        // Nop
-        l->SetState(DoubleQuotationMarkEscape::Instantiate());
-        return true;
-    }
-    l->PushChar(c);
-    return true;
+void DoubleQuotationMark::FeedChar(Lexer* l, char c) {
+    FeedCharInternal(l, transitions_, c);
 }
 
-void DoubleQuotationMark::Error() {
+void DoubleQuotationMark::Error(Lexer*, char) {
     using namespace std::literals;
     throw LexerError("Ivalid lexeme"s);
+}
+
+void DoubleQuotationMark::PushToken(Lexer* l, char) {
+    l->PushToken(token_type::String{std::move(l->MoveValue())});
+}
+
+void DoubleQuotationMark::Default(Lexer* l, char c) {
+    l->PushChar(c);
 }
 
 State* DoubleQuotationMarkEscape::instance_ = nullptr;
@@ -558,7 +521,7 @@ State* DoubleQuotationMarkEscape::Instantiate() {
     return instance_;
 }
 
-bool DoubleQuotationMarkEscape::FeedChar(Lexer *l, char c) {
+void DoubleQuotationMarkEscape::FeedChar(Lexer *l, char c) {
     if (c == 'n') {
         c = '\n';
     }
@@ -567,7 +530,6 @@ bool DoubleQuotationMarkEscape::FeedChar(Lexer *l, char c) {
     }
     l->PushChar(c);
     l->SetState(DoubleQuotationMark::Instantiate());
-    return true;
 }
 
 State* TrailingComment::instance_ = nullptr;
@@ -579,20 +541,17 @@ State* TrailingComment::Instantiate() {
     return instance_;
 }
 
-bool TrailingComment::FeedChar(Lexer *l, char c) {
+void TrailingComment::FeedChar(Lexer *l, char c) {
     if (c == '\n') {
         l->PushToken(token_type::Newline{});
         l->SetState(NewLine::Instantiate());
-        return false;
     }
     if (c == std::char_traits<char>::eof()) {
         l->PushToken(token_type::Newline{});
         ProcessIndentation(l);
         l->PushToken(token_type::Eof{});
         l->SetState(EofState::Instantiate());
-        return false;
     }
-    return true;
 }
 
 State* LineComment::instance_ = nullptr;
@@ -604,21 +563,30 @@ State* LineComment::Instantiate() {
     return instance_;
 }
 
-bool LineComment::FeedChar(Lexer *l, char c) {
+void LineComment::FeedChar(Lexer *l, char c) {
     if (c == '\n') {
         l->SetState(NewLine::Instantiate());
-        return true;
     }
     if (c == std::char_traits<char>::eof()) {
         ProcessIndentation(l);
         l->PushToken(token_type::Eof{});
         l->SetState(EofState::Instantiate());
-        return false;
     }
-    return true;
 }
 
 State* OutState::instance_ = nullptr;
+
+const std::array<Branch, SYMBOLS_COUNT> OutState::transitions_{Branch{NewLine::Instantiate(), &BeginNewLine},
+                                                               Branch{OutState::Instantiate(), &Nop},
+                                                               Branch{TrailingComment::Instantiate(), &Nop},
+                                                               Branch{EofState::Instantiate(), &OnEof},
+                                                               Branch{MayBeId::Instantiate(), &BeginNewValue},
+                                                               Branch{NumberState::Instantiate(), &BeginNewValue},
+                                                               Branch{MayBeCompare::Instantiate(), &BeginNewValue},
+                                                               Branch{SingleQuotationMark::Instantiate(), &ClearValue},
+                                                               Branch{DoubleQuotationMark::Instantiate(), &ClearValue},
+                                                               Branch{OutState::Instantiate(), &Default},
+                                                               Branch{OutState::Instantiate(), &Default}};
 
 State* OutState::Instantiate() {
     if (!instance_) {
@@ -627,54 +595,30 @@ State* OutState::Instantiate() {
     return instance_;
 }
 
-bool OutState::FeedChar(Lexer* l, char c) {
-    if (c == '\n') {
-        l->PushToken(token_type::Newline{});
-        l->SetState(NewLine::Instantiate());
-        return false;
-    }
-    if (c == ' ') {
-        // Nop
-        return true;
-    }
-    if (c == '#') {
-        l->SetState(TrailingComment::Instantiate());
-        return true;
-    }
-    if (c == std::char_traits<char>::eof()) {
-        l->PushToken(token_type::Newline{});
-        ProcessIndentation(l);
-        l->PushToken(token_type::Eof{});
-        l->SetState(EofState::Instantiate());
-        return false;
-    }
-    if (c == '_' || std::isalpha(c)) {
-        l->BeginNewValue(c);
-        l->SetState(MayBeId::Instantiate());
-        return true;
-    }
-    if (std::isdigit(c)) {
-        l->BeginNewValue(c);
-        l->SetState(NumberState::Instantiate());
-        return true;
-    }
-    if (c == '=' || c == '<' || c == '>' || c == '!') {
-        l->BeginNewValue(c);
-        l->SetState(MayBeCompare::Instantiate());
-        return true;
-    }
-    if (c == '\'') {
-        l->ClearValue();
-        l->SetState(SingleQuotationMark::Instantiate());
-        return true;
-    }
-    if (c == '"') {
-        l->ClearValue();
-        l->SetState(DoubleQuotationMark::Instantiate());
-        return true;
-    }
+void OutState::FeedChar(Lexer* l, char c) {
+    FeedCharInternal(l, transitions_, c);
+}
+
+void OutState::BeginNewLine(Lexer* l, char) {
+    l->PushToken(token_type::Newline{});
+}
+
+void OutState::OnEof(Lexer* l, char) {
+    l->PushToken(token_type::Newline{});
+    ProcessIndentation(l);
+    l->PushToken(token_type::Eof{});
+}
+
+void OutState::BeginNewValue(Lexer* l, char c) {
+    l->BeginNewValue(c);
+}
+
+void OutState::ClearValue(Lexer* l, char) {
+    l->ClearValue();
+}
+
+void OutState::Default(Lexer* l, char c) {
     l->PushToken(token_type::Char{c});
-    return false;
 }
 
 State* EofState::instance_ = nullptr;
@@ -686,11 +630,9 @@ State* EofState::Instantiate() {
     return instance_;
 }
 
-bool EofState::FeedChar(Lexer* l, char) {
+void EofState::FeedChar(Lexer* l, char) {
     l->PushToken(token_type::Eof{});
-    return false;
 }
-
 
 
 Lexer::Lexer(std::istream& input)
@@ -728,6 +670,7 @@ void Lexer::PushChar(char c) {
 }
 
 void Lexer::FeedQueue() {
+    auto current_token_queue_size = tokens_buffer_.size();
     for (;;) {
         if (current_char_position_ == input_.gcount()) {
             FillBuffer();
@@ -736,7 +679,8 @@ void Lexer::FeedQueue() {
             state_->FeedChar(this, std::char_traits<char>::eof());
             break;
         }
-        if (!state_->FeedChar(this, char_buffer_[current_char_position_++])) {
+        state_->FeedChar(this, char_buffer_[current_char_position_++]);
+            if (current_token_queue_size < tokens_buffer_.size()) {
             break;
         }
     }
