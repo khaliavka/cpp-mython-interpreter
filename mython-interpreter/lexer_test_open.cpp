@@ -10,6 +10,11 @@ namespace parse {
 
 namespace {
 
+void TestStateObjects() {
+    auto nl_object = NewlineState::Instantiate();
+    auto on_new_line = nl_object->FeedChar('\n');
+}
+
 void TestBufferedReading() {
     {
         istringstream input("abcdefg  hij"s);
@@ -422,6 +427,7 @@ abc#
 }  // namespace
 
 void RunOpenLexerTests(TestRunner& tr) {
+    RUN_TEST(tr, parse::TestStateObjects);
     RUN_TEST(tr, parse::TestBufferedReading);
     RUN_TEST(tr, parse::TestSimpleAssignment);
     RUN_TEST(tr, parse::TestKeywords);

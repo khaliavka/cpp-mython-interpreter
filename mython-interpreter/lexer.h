@@ -1,15 +1,15 @@
 #pragma once
 
 #include <array>
-#include <queue>
 #include <iosfwd>
 #include <iostream>
+#include <list>
 #include <memory>
-#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string>
 #include <variant>
+#include <unordered_map>
 
 namespace parse {
 
@@ -93,189 +93,189 @@ public:
 
 static constexpr int INDENT_SIZE_WS = 2;
 static constexpr int CHAR_BUF_SIZE = 1024;
-static constexpr int SYMBOLS_COUNT = 11;
-class Lexer;
+
 class State;
+using TokenList = std::list<Token>;
 
 struct Branch {
     State* next_state;
-    void (*action)(Lexer*, char);
+    TokenList (*action)(char);
 };
 
 class State {
 public:
-    virtual void FeedChar(Lexer* l, char c) = 0;
+    virtual std::pair<State*, TokenList> FeedChar(char) = 0;
 
 protected:
-    static void Nop(Lexer*, char);
-    static void ZeroNextWS();
-    static void NextWSIncrement();
-    static void ProcessIndentation(Lexer* l);
-    static void FeedCharInternal(Lexer*, const std::array<Branch, SYMBOLS_COUNT>&, char);
+    static void ResetNewLineIndentCounter();
+    static void IncrementNewLineIndentCounter();
+    static TokenList Nop(char);
+    static TokenList ProcessIndentation();
+
+    static std::string MoveValue();
+    static const std::string& GetValue();
+    static void ClearValue();
+    static void BeginNewValue(char);
+    static void ContinueValue(char);
 
 private:
-
-    template <typename T>
-    static void PutIndentDedent(Lexer* l, T token, int count);
-
-    static std::string::size_type next_indent_ws_;
-    static std::string::size_type current_indent_ws_;
+    static int new_line_indent_counter_ws_;
+    static int current_indent_counter_ws_;
+    static std::string value_;
 };
 
-class NewLine : public State {
+class NewlineState : public State {
 public:
     static State* Instantiate();
-    void FeedChar(Lexer* l, char c) override;
+    std::pair<State*, TokenList> FeedChar(char) override;
 
 private:
-    NewLine() = default;
+    NewlineState() = default;
 
-    static void ZeroWS(Lexer*, char);
-    static void NextWS(Lexer*, char);
-    static void BeginEof(Lexer* l, char);
-    static void BeginValue(Lexer* l, char);
-    static void BeginString(Lexer*, char);
-    static void Default(Lexer* l, char);
+    static TokenList OnNewLine(char);
+    static TokenList IncrementNewLineIndent(char);
+    static TokenList OnEOF(char);
+    static TokenList BeginTokenValue(char);
+    static TokenList ClearTokenValue(char);
+    static TokenList Default(char);
 
-    static const std::array<Branch, SYMBOLS_COUNT> transitions_;
+    static const std::array<Branch, 10> transitions_;
     static State* instance_;
 };
 
-class MayBeId : public State {
+class IdOrKeywordState : public State {
 public:
     static State* Instantiate();
-    void FeedChar(Lexer *l, char c) override;
+    std::pair<State*, TokenList> FeedChar(char) override;
 
 private:
-    MayBeId() = default;
+    IdOrKeywordState() = default;
 
-    static void BeginNewLine(Lexer* l, char c);
-    static void PushId(Lexer* l, char c);
-    static void OnEof(Lexer* l, char c);
-    static void ContinueId(Lexer* l, char c);
-    static void BeginNewValue(Lexer* l, char c);
-    static void ClearPreviousValue(Lexer* l, char c);
-    static void Default(Lexer* l, char c);
+    static TokenList MakeKeywordOrIdToken(char);
+    static TokenList OnNewLine(char);
+    static TokenList OnEOF(char);
+    static TokenList BeginTokenValue(char);
+    static TokenList ClearTokenValue(char);
+    static TokenList PushCharToTokenValue(char);
+    static TokenList Default(char);
 
-    static void PushKeyWordOrId(Lexer* l);
-
-    static const std::array<Branch, SYMBOLS_COUNT> transitions_;
+    static const std::unordered_map<std::string, Token> keywords_;
+    static const std::array<Branch, 9> transitions_;
     static State* instance_;
 };
 
-class MayBeCompare : public State {
+class CompareState : public State {
 public:
     static State* Instantiate();
-    void FeedChar(Lexer *l, char c) override;
+    std::pair<State*, TokenList> FeedChar(char) override;
 
 private:
-    MayBeCompare() = default;
+    CompareState() = default;
 
-    static void PushCompareToken(Lexer*, char);
-    static void PushCompareInternal(Lexer*, char);
-    static void BeginNewLine(Lexer*, char);
-    static void PushPrevChar(Lexer*, char);
-    static void OnEof(Lexer*, char);
-    static void BeginNewValue(Lexer*, char);
-    static void ClearValue(Lexer*, char);
-    static void Default(Lexer*, char);
+    static TokenList MakeCompareToken(char);
+    static TokenList OnNewLine(char);
+    static TokenList OnEOF(char);
+    static TokenList BeginTokenValue(char);
+    static TokenList ClearTokenValue(char);
+    static TokenList Default(char);
 
-    static const std::array<Branch, SYMBOLS_COUNT> transitions_;
+    static std::unordered_map<char, Token> compare_chars_;
+    static const std::array<Branch, 10> transitions_;
     static State* instance_;
 };
 
 class NumberState : public State {
 public:
     static State* Instantiate();
-    void FeedChar(Lexer *l, char c) override;
+    std::pair<State*, TokenList> FeedChar(char) override;
 
 private:
     NumberState() = default;
 
-    static void BeginNewLine(Lexer* l, char c);
-    static void PushNumberToken(Lexer*, char);
-    static void OnEof(Lexer* l, char c);
-    static void BeginNewValue(Lexer* l, char c);
-    static void ContinueNumber(Lexer* l, char c);
-    static void ClearValue(Lexer* l, char);
-    static void Default(Lexer* l, char c);
+    static TokenList MakeNumberToken(char);
+    static TokenList OnNewLine(char);
+    static TokenList OnEOF(char);
+    static TokenList BeginTokenValue(char);
+    static TokenList ClearTokenValue(char);
+    static TokenList PushCharToTokenValue(char);
+    static TokenList Default(char c);
 
-    static const std::array<Branch, SYMBOLS_COUNT> transitions_;
+    static const std::array<Branch, 10> transitions_;
     static State* instance_;
 };
 
-class SingleQuotationMark : public State {
+class SingleQuotationMarkState : public State {
 public:
     static State* Instantiate();
-    void FeedChar(Lexer *l, char c) override;
+    std::pair<State*, TokenList> FeedChar(char) override;
 
 private:
-    SingleQuotationMark() = default;
+    SingleQuotationMarkState() = default;
 
-    static void Error(Lexer*, char);
-    static void PushToken(Lexer*, char);
-    static void Default(Lexer*, char);
+    static TokenList Error(char);
+    static TokenList MakeStringToken(char);
+    static TokenList Default(char);
 
-    static const std::array<Branch, SYMBOLS_COUNT> transitions_;
+    static const std::array<Branch, 4> transitions_;
     static State* instance_;
 };
 
-class SingleQuotationMarkEscape : public State {
+class SingleQuotationMarkEscapeState : public State {
 public:
     static State* Instantiate();
-    void FeedChar(Lexer *l, char c) override;
+    std::pair<State*, TokenList> FeedChar(char) override;
 
 private:
-    SingleQuotationMarkEscape() = default;
-
-    static State* instance_;
-};
-
-class DoubleQuotationMark : public State {
-public:
-    static State* Instantiate();
-    void FeedChar(Lexer *l, char c) override;
-
-private:
-    DoubleQuotationMark() = default;
-
-    static void Error(Lexer*, char);
-    static void PushToken(Lexer*, char);
-    static void Default(Lexer*, char);
-
-    static const std::array<Branch, SYMBOLS_COUNT> transitions_;
-    static State* instance_;
-};
-
-class DoubleQuotationMarkEscape : public State {
-public:
-    static State* Instantiate();
-    void FeedChar(Lexer *l, char c) override;
-
-private:
-    DoubleQuotationMarkEscape() = default;
+    SingleQuotationMarkEscapeState() = default;
 
     static State* instance_;
 };
 
-class TrailingComment : public State {
+class DoubleQuotationMarkState : public State {
 public:
     static State* Instantiate();
-    void FeedChar(Lexer *l, char c) override;
+    std::pair<State*, TokenList> FeedChar(char) override;
 
 private:
-    TrailingComment() = default;
+    DoubleQuotationMarkState() = default;
+
+    static TokenList Error(char);
+    static TokenList MakeStringToken(char);
+    static TokenList Default(char);
+
+    static const std::array<Branch, 4> transitions_;
+    static State* instance_;
+};
+
+class DoubleQuotationMarkEscapeState : public State {
+public:
+    static State* Instantiate();
+    std::pair<State*, TokenList> FeedChar(char) override;
+
+private:
+    DoubleQuotationMarkEscapeState() = default;
 
     static State* instance_;
 };
 
-class LineComment : public State {
+class TrailingCommentState : public State {
 public:
     static State* Instantiate();
-    void FeedChar(Lexer *l, char c) override;
+    std::pair<State*, TokenList> FeedChar(char) override;
 
 private:
-    LineComment() = default;
+    TrailingCommentState() = default;
+
+    static State* instance_;
+};
+
+class LineCommentState : public State {
+public:
+    static State* Instantiate();
+    std::pair<State*, TokenList> FeedChar(char) override;
+
+private:
+    LineCommentState() = default;
 
     static State* instance_;
 };
@@ -283,25 +283,25 @@ private:
 class OutState : public State {
 public:
     static State* Instantiate();
-    void FeedChar(Lexer *l, char c) override;
+    std::pair<State*, TokenList> FeedChar(char) override;
 
 private:
     OutState() = default;
 
-    static void BeginNewLine(Lexer* l, char);
-    static void OnEof(Lexer* l, char);
-    static void BeginNewValue(Lexer* l, char c);
-    static void ClearValue(Lexer* l, char);
-    static void Default(Lexer* l, char c);
+    static TokenList OnNewLine(char);
+    static TokenList OnEOF(char);
+    static TokenList BeginTokenValue(char);
+    static TokenList ClearTokenValue(char);
+    static TokenList Default(char);
 
-    static const std::array<Branch, SYMBOLS_COUNT> transitions_;
+    static const std::array<Branch, 10> transitions_;
     static State* instance_;
 };
 
 class EofState : public State {
 public:
     static State* Instantiate();
-    void FeedChar(Lexer *l, char) override;
+    std::pair<State*, TokenList> FeedChar(char) override;
 
 private:
     EofState() = default;
@@ -365,53 +365,15 @@ public:
     }
 
 private:
-    bool FillBuffer();
-    void FeedQueue();
-
-    std::string MoveValue();
-    const std::string& GetValue();
-
-    void ClearValue();
-    void BeginNewValue(char c);
-    void PushChar(char c);
-
-    template <typename T>
-    void PushToken(T token) {
-        tokens_buffer_.push(std::move(token));
-    }
-
-    void SetState(State* s);
-
-    friend class State;
-    friend class NewLine;
-    friend class MayBeId;
-    friend class MayBeCompare;
-    friend class NumberState;
-    friend class SingleQuotationMark;
-    friend class SingleQuotationMarkEscape;
-    friend class DoubleQuotationMark;
-    friend class DoubleQuotationMarkEscape;
-    friend class TrailingComment;
-    friend class LineComment;
-    friend class OutState;
-    friend class EofState;
+    void FeedCharBuffer();
+    void FeedTokenBuffer();
 
     std::istream& input_;
     std::array<char, CHAR_BUF_SIZE> char_buffer_;
     int current_char_position_;
-    std::queue<Token> tokens_buffer_;
-    std::string value_;
+    TokenList tokens_buffer_;
 
     State* state_;
 };
-
-template <typename T>
-void State::PutIndentDedent(Lexer* l, T token, int count) {
-    for (int i = 0; i < count; ++i) {
-        l->PushToken(token);
-    }
-}
-
-
 
 }  // namespace parse
