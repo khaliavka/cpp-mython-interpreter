@@ -184,7 +184,7 @@ public:
 
 private:
     const Class& class_;
-    Closure closure_; // change name to "fields_".
+    Closure fields_; // change name to "fields_".
 };
 
 /*

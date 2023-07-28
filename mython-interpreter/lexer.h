@@ -280,13 +280,13 @@ private:
     static State* instance_;
 };
 
-class OutState : public State {
+class NeutralState : public State {
 public:
     static State* Instantiate();
     std::pair<State*, TokenList> FeedChar(char) override;
 
 private:
-    OutState() = default;
+    NeutralState() = default;
 
     static TokenList OnNewLine(char);
     static TokenList OnEOF(char);

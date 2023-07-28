@@ -139,16 +139,17 @@ State* NewlineState::instance_ = nullptr;
 
 const std::array<Branch, 10>
     NewlineState::transitions_{
-        Branch{NewlineState::Instantiate(), &OnNewLine},
         Branch{NewlineState::Instantiate(), &IncrementNewLineIndent},
-        Branch{LineCommentState::Instantiate(), &OnNewLine},
-        Branch{EofState::Instantiate(), &OnEOF},
         Branch{IdOrKeywordState::Instantiate(), &BeginTokenValue},
         Branch{NumberState::Instantiate(), &BeginTokenValue},
         Branch{CompareState::Instantiate(), &BeginTokenValue},
         Branch{SingleQuotationMarkState::Instantiate(), &ClearTokenValue},
         Branch{DoubleQuotationMarkState::Instantiate(), &ClearTokenValue},
-        Branch{OutState::Instantiate(), &Default}};
+        Branch{NewlineState::Instantiate(), &OnNewLine},
+        Branch{LineCommentState::Instantiate(), &OnNewLine},
+        Branch{EofState::Instantiate(), &OnEOF},
+        Branch{NeutralState::Instantiate(), &Default}};
+
 
 State* NewlineState::Instantiate() {
     if (!instance_) {
@@ -159,15 +160,15 @@ State* NewlineState::Instantiate() {
 
 std::pair<State*, TokenList> NewlineState::FeedChar(char c) {
     const Branch& b = transitions_[
-        (c == '\n') ? 0 :
-        std::isspace(c) ? 1 :
-        (c == '#') ? 2 :
-        (c == std::char_traits<char>::eof()) ? 3 :
-        (c == '_' || std::isalpha(c)) ? 4 :
-        std::isdigit(c) ? 5 :
-        (c == '=' || c == '<' || c == '>' || c == '!') ? 6 :
-        (c == '\'') ? 7 :
-        (c == '"') ? 8 : 9];
+        (c == ' ') ? 0 :
+        (c == '_' || std::isalpha(c)) ? 1 :
+        std::isdigit(c) ? 2 :
+        (c == '=' || c == '!' || c == '<' || c == '>') ? 3 :
+        (c == '\'') ? 4 :
+        (c == '"') ? 5 :
+        (c == '\n') ? 6 :
+        (c == '#') ? 7 :
+        (c == std::char_traits<char>::eof()) ? 8 : 9];
     return std::make_pair(b.next_state, b.action(c));
 }
 
@@ -222,15 +223,15 @@ const std::unordered_map<std::string, Token>
 
 const std::array<Branch, 9>
     IdOrKeywordState::transitions_{
-        Branch{NewlineState::Instantiate(), &OnNewLine},
-        Branch{OutState::Instantiate(), &MakeKeywordOrIdToken},
-        Branch{TrailingCommentState::Instantiate(), &MakeKeywordOrIdToken},
-        Branch{EofState::Instantiate(), &OnEOF},
         Branch{IdOrKeywordState::Instantiate(), &PushCharToTokenValue},
+        Branch{NeutralState::Instantiate(), &MakeKeywordOrIdToken},
+        Branch{NewlineState::Instantiate(), &OnNewLine},
         Branch{CompareState::Instantiate(), &BeginTokenValue},
         Branch{SingleQuotationMarkState::Instantiate(), &ClearTokenValue},
         Branch{DoubleQuotationMarkState::Instantiate(), &ClearTokenValue},
-        Branch{OutState::Instantiate(), &Default}};
+        Branch{TrailingCommentState::Instantiate(), &MakeKeywordOrIdToken},
+        Branch{EofState::Instantiate(), &OnEOF},
+        Branch{NeutralState::Instantiate(), &Default}};
 
 State* IdOrKeywordState::Instantiate() {
     if (!instance_) {
@@ -241,15 +242,14 @@ State* IdOrKeywordState::Instantiate() {
 
 std::pair<State*, TokenList> IdOrKeywordState::FeedChar(char c) {
     const Branch& b = transitions_[
-        (c == '\n') ? 0 :
-        std::isspace(c) ? 1 :
-        (c == '#') ? 2 :
-        (c == std::char_traits<char>::eof()) ? 3 :
-        (c == '_' || std::isalnum(c)) ? 4 :
-        (c == '=' || c == '<' || c == '>' || c == '!') ? 5 :
-        (c == '\'') ? 6 :
-        (c == '"') ? 7 : 8];
-
+        (c == '_' || std::isalnum(c)) ? 0 :
+        (c == ' ') ? 1 :
+        (c == '\n') ? 2 :
+        (c == '=' || c == '!' || c == '<' || c == '>') ? 3 :
+        (c == '\'') ? 4 :
+        (c == '"') ? 5 :
+        (c == '#') ? 6 :
+        (c == std::char_traits<char>::eof()) ? 7 : 8];
     return std::make_pair(b.next_state, b.action(c));
 }
 
@@ -309,16 +309,16 @@ std::unordered_map<char, Token>
 
 const std::array<Branch, 10>
     CompareState::transitions_{
-        Branch{NewlineState::Instantiate(), &OnNewLine},
-        Branch{OutState::Instantiate(), &ClearTokenValue},
-        Branch{TrailingCommentState::Instantiate(), &ClearTokenValue},
-        Branch{EofState::Instantiate(), &OnEOF},
+        Branch{NeutralState::Instantiate(), &ClearTokenValue},
+        Branch{NeutralState::Instantiate(), &MakeCompareToken},
         Branch{IdOrKeywordState::Instantiate(), &BeginTokenValue},
         Branch{NumberState::Instantiate(), &BeginTokenValue},
-        Branch{OutState::Instantiate(), &MakeCompareToken},
         Branch{SingleQuotationMarkState::Instantiate(), &ClearTokenValue},
         Branch{DoubleQuotationMarkState::Instantiate(), &ClearTokenValue},
-        Branch{OutState::Instantiate(), &Default}};
+        Branch{TrailingCommentState::Instantiate(), &ClearTokenValue},
+        Branch{NewlineState::Instantiate(), &OnNewLine},
+        Branch{EofState::Instantiate(), &OnEOF},
+        Branch{NeutralState::Instantiate(), &Default}};
 
 State* CompareState::Instantiate() {
     if (!instance_) {
@@ -329,16 +329,15 @@ State* CompareState::Instantiate() {
 
 std::pair<State*, TokenList> CompareState::FeedChar(char c) {
     const Branch& b = transitions_[
-        (c == '\n') ? 0 :
-        std::isspace(c) ? 1 :
-        (c == '#') ? 2 :
-        (c == std::char_traits<char>::eof()) ? 3 :
-        (c == '_' || std::isalpha(c)) ? 4 :
-        std::isdigit(c) ? 5 :
-        (c == '=') ? 6 :
-        (c == '\'') ? 7 :
-        (c == '"') ? 8 : 9];
-
+        (c == ' ') ? 0 :
+        (c == '=') ? 1 :
+        (c == '_' || std::isalpha(c)) ? 2 :
+        std::isdigit(c) ? 3 :
+        (c == '\'') ? 4 :
+        (c == '"') ? 5 :
+        (c == '#') ? 6 :
+        (c == '\n') ? 7 :
+        (c == std::char_traits<char>::eof()) ? 8 : 9];
     return std::make_pair(b.next_state, b.action(c));
 }
 
@@ -387,16 +386,16 @@ State* NumberState::instance_ = nullptr;
 
 const std::array<Branch, 10>
     NumberState::transitions_{
-        Branch{NewlineState::Instantiate(), &OnNewLine},
-        Branch{OutState::Instantiate(), &MakeNumberToken},
-        Branch{TrailingCommentState::Instantiate(), &MakeNumberToken},
-        Branch{EofState::Instantiate(), &OnEOF},
-        Branch{IdOrKeywordState::Instantiate(), &BeginTokenValue},
         Branch{NumberState::Instantiate(), &PushCharToTokenValue},
+        Branch{NewlineState::Instantiate(), &OnNewLine},
+        Branch{NeutralState::Instantiate(), &MakeNumberToken},
+        Branch{TrailingCommentState::Instantiate(), &MakeNumberToken},
         Branch{CompareState::Instantiate(), &BeginTokenValue},
+        Branch{IdOrKeywordState::Instantiate(), &BeginTokenValue},
         Branch{SingleQuotationMarkState::Instantiate(), &ClearTokenValue},
         Branch{DoubleQuotationMarkState::Instantiate(), &ClearTokenValue},
-        Branch{OutState::Instantiate(), &Default}};
+        Branch{EofState::Instantiate(), &OnEOF},
+        Branch{NeutralState::Instantiate(), &Default}};
 
 State* NumberState::Instantiate() {
     if (!instance_) {
@@ -407,16 +406,15 @@ State* NumberState::Instantiate() {
 
 std::pair<State*, TokenList> NumberState::FeedChar(char c) {
     const Branch& b = transitions_[
-        (c == '\n') ? 0 :
-        std::isspace(c) ? 1 :
-        (c == '#') ? 2 :
-        (c == std::char_traits<char>::eof()) ? 3 :
-        (c == '_' || std::isalpha(c)) ? 4 :
-        std::isdigit(c) ? 5 :
-        (c == '=' || c == '<' || c == '>' || c == '!') ? 6 :
-        (c == '\'') ? 7 :
-        (c == '"') ? 8 : 9];
-
+        std::isdigit(c) ? 0 :
+        (c == '\n') ? 1 :
+        (c == ' ') ? 2 :
+        (c == '#') ? 3 :
+        (c == '=' || c == '!' || c == '<' || c == '>') ? 4 :
+        (c == '_' || std::isalpha(c)) ? 5 :
+        (c == '\'') ? 6 :
+        (c == '"') ? 7 :
+        (c == std::char_traits<char>::eof()) ? 8 : 9];
     return std::make_pair(b.next_state, b.action(c));
 }
 
@@ -469,9 +467,9 @@ State* SingleQuotationMarkState::instance_ = nullptr;
 
 const std::array<Branch, 4>
     SingleQuotationMarkState::transitions_{
-        Branch{EofState::Instantiate(), &Error},
-        Branch{OutState::Instantiate(), &MakeStringToken},
+        Branch{NeutralState::Instantiate(), &MakeStringToken},
         Branch{SingleQuotationMarkEscapeState::Instantiate(), &Nop},
+        Branch{EofState::Instantiate(), &Error},
         Branch{SingleQuotationMarkState::Instantiate(), &Default}};
 
 State* SingleQuotationMarkState::Instantiate() {
@@ -483,10 +481,9 @@ State* SingleQuotationMarkState::Instantiate() {
 
 std::pair<State*, TokenList> SingleQuotationMarkState::FeedChar(char c) {
     const Branch& b = transitions_[
-        (c == '\n' || c == std::char_traits<char>::eof()) ? 0 :
-        (c == '\'') ? 1 :
-        (c == '\\') ? 2 : 3];
-
+        (c == '\'') ? 0 :
+        (c == '\\') ? 1 :
+        (c == '\n' || c == std::char_traits<char>::eof()) ? 2 : 3];
     return std::make_pair(b.next_state, b.action(c));
 }
 
@@ -530,9 +527,9 @@ State* DoubleQuotationMarkState::instance_ = nullptr;
 
 const std::array<Branch, 4>
     DoubleQuotationMarkState::transitions_{
-        Branch{EofState::Instantiate(), &Error},
-        Branch{OutState::Instantiate(), &MakeStringToken},
+        Branch{NeutralState::Instantiate(), &MakeStringToken},
         Branch{DoubleQuotationMarkEscapeState::Instantiate(), &Nop},
+        Branch{EofState::Instantiate(), &Error},
         Branch{DoubleQuotationMarkState::Instantiate(), &Default}};
 
 State* DoubleQuotationMarkState::Instantiate() {
@@ -544,10 +541,9 @@ State* DoubleQuotationMarkState::Instantiate() {
 
 std::pair<State*, TokenList> DoubleQuotationMarkState::FeedChar(char c) {
     const Branch& b = transitions_[
-        (c == '\n' || c == std::char_traits<char>::eof()) ? 0 :
-        (c == '"') ? 1 :
-        (c == '\\') ? 2 : 3];
-
+        (c == '"') ? 0 :
+        (c == '\\') ? 1 :
+        (c == '\n' || c == std::char_traits<char>::eof()) ? 2 : 3];
     return std::make_pair(b.next_state, b.action(c));
 }
 
@@ -630,12 +626,12 @@ std::pair<State*, TokenList> LineCommentState::FeedChar(char c) {
     return std::make_pair(LineCommentState::Instantiate(), TokenList{});
 }
 
-State* OutState::instance_ = nullptr;
+State* NeutralState::instance_ = nullptr;
 
 const std::array<Branch, 10>
-    OutState::transitions_{
+    NeutralState::transitions_{
         Branch{NewlineState::Instantiate(), &OnNewLine},
-        Branch{OutState::Instantiate(), &Nop},
+        Branch{NeutralState::Instantiate(), &Nop},
         Branch{TrailingCommentState::Instantiate(), &Nop},
         Branch{EofState::Instantiate(), &OnEOF},
         Branch{IdOrKeywordState::Instantiate(), &BeginTokenValue},
@@ -643,52 +639,51 @@ const std::array<Branch, 10>
         Branch{CompareState::Instantiate(), &BeginTokenValue},
         Branch{SingleQuotationMarkState::Instantiate(), &ClearTokenValue},
         Branch{DoubleQuotationMarkState::Instantiate(), &ClearTokenValue},
-        Branch{OutState::Instantiate(), &Default}};
+        Branch{NeutralState::Instantiate(), &Default}};
 
-State* OutState::Instantiate() {
+State* NeutralState::Instantiate() {
     if (!instance_) {
-        instance_ = new OutState;
+        instance_ = new NeutralState;
     }
     return instance_;
 }
 
-std::pair<State*, TokenList> OutState::FeedChar(char c) {
+std::pair<State*, TokenList> NeutralState::FeedChar(char c) {
     const Branch& b = transitions_[
         (c == '\n') ? 0 :
-        std::isspace(c) ? 1 :
+        (c == ' ') ? 1 :
         (c == '#') ? 2 :
         (c == std::char_traits<char>::eof()) ? 3 :
         (c == '_' || std::isalpha(c)) ? 4 :
         std::isdigit(c) ? 5 :
-        (c == '=' || c == '<' || c == '>' || c == '!') ? 6 :
+        (c == '=' || c == '!' || c == '<' || c == '>') ? 6 :
         (c == '\'') ? 7 :
         (c == '"') ? 8 : 9];
-
     return std::make_pair(b.next_state, b.action(c));
 }
 
-TokenList OutState::OnNewLine(char) {
+TokenList NeutralState::OnNewLine(char) {
     return TokenList{token_type::Newline{}};
 }
 
-TokenList OutState::OnEOF(char) {
+TokenList NeutralState::OnEOF(char) {
     TokenList result{token_type::Newline{}};
     result.splice(result.end(), ProcessIndentation());
     result.emplace_back(token_type::Eof{});
     return result;
 }
 
-TokenList OutState::BeginTokenValue(char c) {
+TokenList NeutralState::BeginTokenValue(char c) {
     BeginNewValue(c);
     return {};
 }
 
-TokenList OutState::ClearTokenValue(char) {
+TokenList NeutralState::ClearTokenValue(char) {
     ClearValue();
     return {};
 }
 
-TokenList OutState::Default(char c) {
+TokenList NeutralState::Default(char c) {
     return TokenList{token_type::Char{c}};
 }
 

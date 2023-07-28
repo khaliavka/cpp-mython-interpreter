@@ -87,7 +87,7 @@ bool ClassInstance::HasMethod(const std::string& method, size_t argument_count) 
 }
 
 Closure& ClassInstance::Fields() {
-    return closure_;
+    return fields_;
 }
 
 const Closure& ClassInstance::Fields() const {
@@ -104,8 +104,7 @@ ObjectHolder ClassInstance::Call(const std::string& method_name,
     if (!method || method->formal_params.size() != actual_args.size()) {
         throw runtime_error("The name of the method or the number of params is invalid.");
     }
-    Closure closure; // should compose with the next statement
-    closure.emplace("self"s, ObjectHolder::Share(*this));
+    Closure closure{{"self"s, ObjectHolder::Share(*this)}};
     for (size_t i = 0; i < method->formal_params.size(); ++i) {
         closure.emplace(method->formal_params[i], actual_args[i]);
     }

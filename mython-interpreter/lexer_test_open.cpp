@@ -10,6 +10,13 @@ namespace parse {
 
 namespace {
 
+void TestExperimental() {
+    istringstream input("x'y\""s);
+    Lexer lexer(input);
+    ASSERT_EQUAL(lexer.CurrentToken(), Token(token_type::Id{"x"s}));
+    ASSERT_THROWS(lexer.NextToken(), LexerError);
+}
+
 void TestStateObjects() {
     auto nl_object = NewlineState::Instantiate();
     auto on_new_line = nl_object->FeedChar('\n');
@@ -427,6 +434,7 @@ abc#
 }  // namespace
 
 void RunOpenLexerTests(TestRunner& tr) {
+    RUN_TEST(tr, parse::TestExperimental);
     RUN_TEST(tr, parse::TestStateObjects);
     RUN_TEST(tr, parse::TestBufferedReading);
     RUN_TEST(tr, parse::TestSimpleAssignment);

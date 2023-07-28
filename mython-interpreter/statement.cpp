@@ -46,7 +46,7 @@ ObjectHolder VariableValue::Execute(Closure& closure, Context& /*context*/) {
     assert(!dotted_ids_.empty());
     auto it = closure.find(dotted_ids_[0]);
     if (it == closure.end()) {
-        throw std::runtime_error("There is not a variable with a name: " + dotted_ids_[0]);
+        throw std::runtime_error("There is no variable with the name: " + dotted_ids_[0]);
     }
     ObjectHolder obj = it->second;
     for (size_t i = 1; i < dotted_ids_.size(); ++i) {
@@ -58,7 +58,7 @@ ObjectHolder VariableValue::Execute(Closure& closure, Context& /*context*/) {
 }
 
 unique_ptr<Print> Print::Variable(const std::string& name) {
-    return make_unique<Print>(Print{make_unique<VariableValue>(VariableValue{name})});
+    return make_unique<Print>(make_unique<VariableValue>(name));
 }
 
 Print::Print(unique_ptr<Statement> arg) : args_{} {
@@ -91,7 +91,7 @@ ObjectHolder MethodCall::Execute(Closure& closure, Context& context) {
     ObjectHolder obj = object_->Execute(closure, context);
     ClassInstance* cli = obj.TryAs<ClassInstance>();
     if (!cli) {
-        throw runtime_error("Cannot call a method, not a ClassInstance"s);
+        throw runtime_error("Cannot call the method, not a ClassInstance"s);
     }
     assert(cli->HasMethod(method_name_, args_.size()));
     std::vector<ObjectHolder> actual_args;
